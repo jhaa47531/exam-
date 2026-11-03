@@ -1,13 +1,17 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, Navigate } from 'react-router-dom';
 import { ShieldCheck, GraduationCap, Lock, Award } from 'lucide-react';
-import { DemoBar } from '../components/DemoBar';
+import { useAuth } from '../context/AuthContext';
 import { motion } from 'motion/react';
 
 export const AuthLayout: React.FC = () => {
+  const { user, isLoading } = useAuth();
+
+  if (!isLoading && user) {
+    return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard'} replace />;
+  }
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white relative">
-      <DemoBar />
 
       {/* Ambient background glows */}
       <div className="absolute top-12 left-1/4 w-96 h-96 bg-blue-100/60 rounded-full blur-3xl pointer-events-none -z-10" />

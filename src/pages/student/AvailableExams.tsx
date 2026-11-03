@@ -119,6 +119,10 @@ export const AvailableExams: React.FC = () => {
                     <span>Resume Attempt</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
+                ) : new Date(exam.start_time).getTime() > Date.now() ? (
+                  <span className="px-4 py-2 rounded-xl bg-slate-100 text-slate-500 border border-slate-200 text-xs font-semibold flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" /> Starts {new Date(exam.start_time).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 ) : (
                   <Link
                     to={`/student/exam/${exam.id}`}

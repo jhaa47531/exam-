@@ -48,16 +48,13 @@ export const StudentVerification: React.FC = () => {
   };
 
   const handleApprove = async (id: string) => {
-    if (!window.confirm('Approve this student ID verification? The student will immediately receive full exam access.')) {
-      return;
-    }
     setIsProcessing(true);
     try {
       await api.admin.approveVerification(id);
       await loadVerifications();
       setSelectedVerification(null);
     } catch (err: any) {
-      alert(err.message || 'Approval failed');
+      console.error('Approval failed:', err);
     } finally {
       setIsProcessing(false);
     }
@@ -75,7 +72,7 @@ export const StudentVerification: React.FC = () => {
       setRejectReason('');
       await loadVerifications();
     } catch (err: any) {
-      alert(err.message || 'Rejection failed');
+      console.error('Rejection failed:', err);
     } finally {
       setIsProcessing(false);
     }

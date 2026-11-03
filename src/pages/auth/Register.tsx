@@ -32,7 +32,7 @@ export const Register: React.FC = () => {
   const [enrollmentNumber, setEnrollmentNumber] = useState('');
   const [courseId, setCourseId] = useState('');
   const [semesterId, setSemesterId] = useState('');
-  const [idCardPreview, setIdCardPreview] = useState<string>('https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=800');
+  const [idCardPreview, setIdCardPreview] = useState<string>('');
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,12 +44,7 @@ export const Register: React.FC = () => {
         setCourseId(res.courses[0].id);
       }
     }).catch(() => {
-      setCourses([
-        { id: 'course-bca-01', code: 'BCA', name: 'Bachelor of Computer Applications', is_active: true },
-        { id: 'course-mca-02', code: 'MCA', name: 'Master of Computer Applications', is_active: true },
-        { id: 'course-bba-03', code: 'BBA', name: 'Bachelor of Business Administration', is_active: true },
-      ]);
-      setCourseId('course-bca-01');
+      setCourses([]);
     });
   }, []);
 
@@ -61,10 +56,7 @@ export const Register: React.FC = () => {
         setSemesterId(res.semesters[0].id);
       }
     }).catch(() => {
-      setSemesters([
-        { id: 'sem-bca-3', course_id: courseId, semester_number: 3, name: 'Semester III', is_active: true },
-      ]);
-      setSemesterId('sem-bca-3');
+      setSemesters([]);
     });
   }, [courseId]);
 
@@ -82,12 +74,6 @@ export const Register: React.FC = () => {
       setIdCardPreview(reader.result as string);
     };
     reader.readAsDataURL(file);
-  };
-
-  const handleUseDemoSampleID = () => {
-    setIdCardPreview('https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&q=80&w=800');
-    setCollegeStudentId('CS-2026-9140');
-    setEnrollmentNumber('ENR-BCA-2024-098');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -289,13 +275,6 @@ export const Register: React.FC = () => {
             <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">
               College ID Card Document
             </p>
-            <button
-              type="button"
-              onClick={handleUseDemoSampleID}
-              className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 underline cursor-pointer"
-            >
-              Attach Sample ID Card
-            </button>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-2xl bg-slate-50/80 border border-dashed border-slate-300">
@@ -361,8 +340,8 @@ export const Register: React.FC = () => {
 
       <div className="mt-6 text-center text-xs text-slate-500">
         Already registered?{' '}
-        <Link to="/auth/login" className="font-semibold text-blue-600 hover:text-blue-700 underline underline-offset-2">
-          Sign In here &rarr;
+        <Link to="/auth/student-login" className="font-semibold text-blue-600 hover:text-blue-700 underline underline-offset-2">
+          Sign In to Student Station &rarr;
         </Link>
       </div>
     </div>

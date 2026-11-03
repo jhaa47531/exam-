@@ -9,11 +9,12 @@ interface AuthContextType {
   verification: StudentVerification | null;
   enrollment: StudentEnrollment | null;
   isLoading: boolean;
-  login: (credentials: { email: string; password: string }) => Promise<void>;
+  login: (credentials: { email?: string; identifier?: string; password: string }) => Promise<void>;
+  adminLogin: (credentials: { identifier: string; password: string }) => Promise<void>;
+  studentLogin: (credentials: { identifier: string; password: string }) => Promise<void>;
   register: (formData: any) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
-  switchDemoUser: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -47,12 +48,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (token) {
       refreshProfile();
     } else {
-      // Auto-load default verified student for initial demo experience if not logged in
       setIsLoading(false);
     }
   }, [token]);
 
-  const login = async (credentials: { email: string; password: string }) => {
+  const login = async (credentials: { email?: string; identifier?: string; password: string }) => {
     setIsLoading(true);
     try {
       const res = await api.auth.login(credentials);
@@ -60,6 +60,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(res.token);
       setUser(res.user);
       setVerification(res.verification || null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const adminLogin = async (credentials: { identifier: string; password: string }) => {
+    setIsLoading(true);
+    try {
+      const res = await api.auth.adminLogin(credentials);
+      tokenStorage.set(res.token);
+      setToken(res.token);
+      setUser(res.user);
+      setVerification(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const studentLogin = async (credentials: { identifier: string; password: string }) => {
+    setIsLoading(true);
+    try {
+      const res = await api.auth.studentLogin(credentials);
+      tokenStorage.set(res.token);
+      setToken(res.token);
+      setUser(res.user);
+      setVerification(res.verification || null);
+      setEnrollment(res.enrollment || null);
     } finally {
       setIsLoading(false);
     }
@@ -92,11 +119,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const switchDemoUser = async (email: string) => {
-    const password = email.startsWith('admin') ? 'Admin@1234' : 'Student@1234';
-    await login({ email, password });
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -107,10 +129,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         enrollment,
         isLoading,
         login,
+        adminLogin,
+        studentLogin,
         register,
         logout,
         refreshProfile,
-        switchDemoUser,
       }}
     >
       {children}

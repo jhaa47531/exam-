@@ -8,7 +8,9 @@ import { AdminLayout } from './layouts/AdminLayout';
 import { StudentLayout } from './layouts/StudentLayout';
 
 // Auth Pages
-import { Login } from './pages/auth/Login';
+import { PortalSelect } from './pages/auth/PortalSelect';
+import { AdminLogin } from './pages/auth/AdminLogin';
+import { StudentLogin } from './pages/auth/StudentLogin';
 import { Register } from './pages/auth/Register';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
 
@@ -39,7 +41,7 @@ import { AdminSettings } from './pages/admin/AdminSettings';
 const RootRedirect: React.FC = () => {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
-  if (!user) return <Navigate to="/auth/login" replace />;
+  if (!user) return <Navigate to="/auth" replace />;
   return user.role === 'admin' ? (
     <Navigate to="/admin/dashboard" replace />
   ) : (
@@ -50,7 +52,7 @@ const RootRedirect: React.FC = () => {
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
-  if (!user) return <Navigate to="/auth/login" replace />;
+  if (!user) return <Navigate to="/auth/admin-login" replace />;
   if (user.role !== 'admin') return <Navigate to="/student/dashboard" replace />;
   return <>{children}</>;
 };
@@ -58,7 +60,7 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const StudentRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
-  if (!user) return <Navigate to="/auth/login" replace />;
+  if (!user) return <Navigate to="/auth/student-login" replace />;
   if (user.role !== 'student') return <Navigate to="/admin/dashboard" replace />;
   return <>{children}</>;
 };
@@ -73,8 +75,10 @@ export default function App() {
 
           {/* Authentication Routes */}
           <Route path="/auth" element={<AuthLayout />}>
-            <Route index element={<Navigate to="/auth/login" replace />} />
-            <Route path="login" element={<Login />} />
+            <Route index element={<PortalSelect />} />
+            <Route path="admin-login" element={<AdminLogin />} />
+            <Route path="student-login" element={<StudentLogin />} />
+            <Route path="login" element={<Navigate to="/auth" replace />} />
             <Route path="register" element={<Register />} />
             <Route path="forgot-password" element={<ForgotPassword />} />
           </Route>

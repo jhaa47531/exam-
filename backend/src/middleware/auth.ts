@@ -49,24 +49,21 @@ export async function authenticateToken(
       return;
     }
 
-    // Local / development token verification
-    // Token format: token-<userId> or direct userId
-    let userId = token.replace('token-', '');
-    let profile = dataStore.profiles.find((p) => p.id === userId || p.email === userId);
+    // When real database is not connected, check if session is stored or reject
+    const userId = token.replace('token-', '');
+    const profile = dataStore.profiles.find((p) => p.id === userId || p.email === userId);
 
     if (!profile) {
-      // Allow fallback lookup if token is an email
-      profile = dataStore.profiles.find((p) => p.email === token);
-    }
-
-    if (!profile) {
-      res.status(401).json({ error: 'Invalid or expired authentication session' });
+      res.status(401).json({
+        error: 'Database is disconnected. No active authenticated session found.',
+        code: 'DATABASE_DISCONNECTED',
+      });
       return;
     }
 
     req.user = profile;
     next();
-  } catch (err: any) {
+  } catch {
     res.status(500).json({ error: 'Internal server error verifying authentication' });
   }
 }
@@ -113,26 +110,46 @@ export function requireStudent(
   next();
 }
 
-export function requireVerifiedStudent(
+export async function requireVerifiedStudent(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   if (!req.user || req.user.role !== 'student') {
     res.status(403).json({ error: 'Student verification required' });
     return;
   }
 
-  const verif = dataStore.studentVerifications.find(
-    (v) => v.student_id === req.user!.id
-  );
+  let verifStatus: string = 'unregistered';
+  let rejectionReason: string | undefined;
 
-  if (!verif || verif.status !== 'approved') {
+  if (isRealSupabaseConfigured && supabase) {
+    const { data: verif } = await supabase
+      .from('student_verifications')
+      .select('status, rejection_reason')
+      .eq('student_id', req.user.id)
+      .maybeSingle();
+
+    if (verif) {
+      verifStatus = verif.status;
+      rejectionReason = verif.rejection_reason;
+    }
+  } else {
+    const verif = dataStore.studentVerifications.find(
+      (v) => v.student_id === req.user!.id
+    );
+    if (verif) {
+      verifStatus = verif.status;
+      rejectionReason = verif.rejection_reason;
+    }
+  }
+
+  if (verifStatus !== 'approved') {
     res.status(403).json({
       error: 'Access denied: College ID verification is not approved',
       code: 'VERIFICATION_RESTRICTED',
-      verificationStatus: verif ? verif.status : 'unregistered',
-      rejectionReason: verif?.rejection_reason,
+      verificationStatus: verifStatus,
+      rejectionReason,
     });
     return;
   }

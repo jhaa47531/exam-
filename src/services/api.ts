@@ -58,8 +58,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const api = {
   // Auth
   auth: {
-    login: (credentials: { email: string; password: string }) =>
-      request<{ user: UserProfile; token: string; verification?: StudentVerification }>('/api/auth/login', {
+    login: (credentials: { email?: string; identifier?: string; password: string }) =>
+      request<{ user: UserProfile; token: string; verification?: StudentVerification; enrollment?: any }>('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(credentials),
+      }),
+    adminLogin: (credentials: { identifier: string; password: string }) =>
+      request<{ user: UserProfile; token: string }>('/api/auth/admin/login', {
+        method: 'POST',
+        body: JSON.stringify(credentials),
+      }),
+    studentLogin: (credentials: { identifier: string; password: string }) =>
+      request<{ user: UserProfile; token: string; verification?: StudentVerification; enrollment?: any }>('/api/auth/student/login', {
         method: 'POST',
         body: JSON.stringify(credentials),
       }),
@@ -67,6 +77,8 @@ export const api = {
       request<{ success: boolean }>('/api/auth/logout', { method: 'POST' }),
     me: () =>
       request<{ user: UserProfile; verification?: StudentVerification; enrollment?: any }>('/api/auth/me'),
+    getDbStatus: () =>
+      request<{ connected: boolean; message: string; timestamp: string }>('/api/database/status'),
   },
 
   // Student

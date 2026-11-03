@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { DemoBar } from '../components/DemoBar';
 import {
   LayoutDashboard,
   FileCheck2,
@@ -29,6 +28,7 @@ export const StudentLayout: React.FC = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unreadNotifsCount, setUnreadNotifsCount] = useState<number>(0);
+  const [dbStatus, setDbStatus] = useState<{ connected: boolean; message: string } | null>(null);
 
   useEffect(() => {
     refreshProfile();
@@ -36,6 +36,12 @@ export const StudentLayout: React.FC = () => {
       const unread = res.notifications.filter((n) => !n.is_read).length;
       setUnreadNotifsCount(unread);
     }).catch(() => {});
+
+    api.auth.getDbStatus().then((res) => {
+      setDbStatus(res);
+    }).catch(() => {
+      setDbStatus({ connected: false, message: 'Database connection check failed' });
+    });
   }, [location.pathname]);
 
   const isVerified = verification?.status === 'approved';
@@ -77,14 +83,22 @@ export const StudentLayout: React.FC = () => {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/auth/login');
+    navigate('/auth/student-login');
   };
 
   const currentItem = navItems.find((item) => location.pathname.startsWith(item.path));
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans">
-      <DemoBar />
+      {dbStatus && !dbStatus.connected && (
+        <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-semibold flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-slate-950 animate-pulse" />
+            <span>Database Connection: {dbStatus.message}</span>
+          </div>
+          <span className="text-[11px] font-mono bg-amber-600/30 px-2 py-0.5 rounded">Standalone Mode</span>
+        </div>
+      )}
 
       {/* Verification Status Warning Ribbon if Pending or Rejected */}
       {verification && verification.status === 'pending' && (

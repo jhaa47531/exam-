@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Lock, Mail, ArrowRight, ShieldCheck, UserCheck, AlertCircle } from 'lucide-react';
+import { Lock, Mail, ArrowRight, ShieldCheck, ArrowLeft, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 
-export const Login: React.FC = () => {
-  const { login } = useAuth();
+export const AdminLogin: React.FC = () => {
+  const { adminLogin } = useAuth();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -19,33 +19,39 @@ export const Login: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      await login({ email, password });
-      if (email.toLowerCase().includes('admin')) {
-        navigate('/admin/dashboard');
-      } else {
-        navigate('/student/dashboard');
-      }
+      await adminLogin({ identifier, password });
+      navigate('/admin/dashboard', { replace: true });
     } catch (err: any) {
-      setError(err.message || 'Invalid credentials');
+      setError(err.message || 'Invalid administrator credentials');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleFillDemo = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setError(null);
-  };
-
   return (
     <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/40">
+      <div className="mb-6 flex items-center justify-between">
+        <Link
+          to="/auth"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Portal Selection</span>
+        </Link>
+        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+          Admin Portal
+        </span>
+      </div>
+
       <div className="mb-6 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center mx-auto mb-3 shadow-md shadow-blue-500/20">
+          <ShieldCheck className="w-6 h-6" />
+        </div>
         <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-          Sign In to ExamPro
+          Administrator Sign In
         </h2>
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
-          Access your secure examination portal or proctoring station
+          Access proctoring radar, exam scheduling, and student verification
         </p>
       </div>
 
@@ -63,17 +69,17 @@ export const Login: React.FC = () => {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-            Email Address
+            Admin Email or Username
           </label>
           <div className="relative">
             <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
             <input
-              type="email"
+              type="text"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="e.g. student@college.edu"
-              className="w-full bg-slate-50/70 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="e.g. admin@exampro.edu"
+              className="w-full bg-slate-50/70 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition outline-none"
             />
           </div>
         </div>
@@ -98,7 +104,7 @@ export const Login: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••••••"
-              className="w-full bg-slate-50/70 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition"
+              className="w-full bg-slate-50/70 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition outline-none"
             />
           </div>
         </div>
@@ -112,49 +118,17 @@ export const Login: React.FC = () => {
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           ) : (
             <>
-              <span>Sign In to Station</span>
+              <span>Sign In as Administrator</span>
               <ArrowRight className="w-4 h-4" />
             </>
           )}
         </button>
       </form>
 
-      {/* Quick Demo Logins Box */}
-      <div className="mt-6 pt-5 border-t border-slate-100">
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5 text-center">
-          One-Click Demo Credentials
-        </p>
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <button
-            type="button"
-            onClick={() => handleFillDemo('admin@exampro.edu', 'Admin@1234')}
-            className="p-3 rounded-xl bg-slate-50 hover:bg-blue-50/60 border border-slate-200 hover:border-blue-200 text-left transition flex items-start gap-2.5 cursor-pointer group"
-          >
-            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 group-hover:scale-110 transition" />
-            <div>
-              <div className="font-semibold text-slate-900">Chief Proctor</div>
-              <div className="text-[11px] text-slate-500">Admin Account</div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleFillDemo('student@college.edu', 'Student@1234')}
-            className="p-3 rounded-xl bg-slate-50 hover:bg-emerald-50/60 border border-slate-200 hover:border-emerald-200 text-left transition flex items-start gap-2.5 cursor-pointer group"
-          >
-            <UserCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5 group-hover:scale-110 transition" />
-            <div>
-              <div className="font-semibold text-slate-900">Verified Student</div>
-              <div className="text-[11px] text-slate-500">BCA - Semester 3</div>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-6 text-center text-xs text-slate-500">
-        Don&apos;t have an account yet?{' '}
-        <Link to="/auth/register" className="font-semibold text-blue-600 hover:text-blue-700 underline underline-offset-2">
-          Register with College ID &rarr;
+      <div className="mt-8 pt-5 border-t border-slate-100 text-center text-xs text-slate-500">
+        Looking for the candidate station?{' '}
+        <Link to="/auth/student-login" className="font-bold text-blue-600 hover:text-blue-700 underline underline-offset-2">
+          Switch to Student Login &rarr;
         </Link>
       </div>
     </div>

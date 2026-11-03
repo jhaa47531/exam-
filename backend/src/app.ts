@@ -35,14 +35,33 @@ export function createApp(): Express {
     });
   });
 
-  // Health Check
-  app.get('/api/health', (_req, res) => {
+  // System & Database Health Check
+  app.get('/api/health', async (_req, res) => {
+    const { testDatabaseConnection } = await import('./config/supabase');
+    const dbStatus = await testDatabaseConnection();
     res.json({
       status: 'ok',
       service: 'ExamPro API Engine',
+      database: dbStatus,
       timestamp: new Date().toISOString(),
       version: '1.0.0',
     });
+  });
+
+  app.get('/api/system/status', async (_req, res) => {
+    const { testDatabaseConnection } = await import('./config/supabase');
+    const dbStatus = await testDatabaseConnection();
+    res.json({
+      status: dbStatus.connected ? 'online' : 'disconnected',
+      database: dbStatus,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.get('/api/database/status', async (_req, res) => {
+    const { testDatabaseConnection } = await import('./config/supabase');
+    const dbStatus = await testDatabaseConnection();
+    res.json(dbStatus);
   });
 
   return app;

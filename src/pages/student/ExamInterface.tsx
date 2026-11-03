@@ -54,6 +54,8 @@ export const ExamInterface: React.FC = () => {
   const [isTerminated, setIsTerminated] = useState(false);
   const [terminationReason, setTerminationReason] = useState<string | null>(null);
   const [warningCount, setWarningCount] = useState<number>(0);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Fullscreen state
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -104,8 +106,7 @@ export const ExamInterface: React.FC = () => {
         }
       })
       .catch((err) => {
-        alert(err.message || 'Could not initialize examination attempt');
-        navigate('/student/dashboard');
+        setInitError(err.message || 'Could not initialize examination attempt');
       })
       .finally(() => {
         setIsLoading(false);
@@ -301,7 +302,7 @@ export const ExamInterface: React.FC = () => {
       await api.exam.submit(attempt.id);
       navigate(`/student/results/${examId}`);
     } catch (err: any) {
-      alert(err.message || 'Submission failed');
+      setSubmitError(err.message || 'Submission failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -323,6 +324,26 @@ export const ExamInterface: React.FC = () => {
         <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
         <h2 className="text-lg font-bold text-slate-900">Initializing Secure Proctored Station...</h2>
         <p className="text-xs text-slate-500 mt-1">Verifying eligibility token & server time sync</p>
+      </div>
+    );
+  }
+
+  if (initError) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
+        <div className="bg-white border border-slate-200/90 rounded-3xl p-8 max-w-md w-full text-center space-y-4 shadow-xl">
+          <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-7 h-7" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900">Exam Window Notice</h2>
+          <p className="text-sm text-slate-600 leading-relaxed">{initError}</p>
+          <button
+            onClick={() => navigate('/student/dashboard')}
+            className="w-full mt-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition cursor-pointer shadow-sm"
+          >
+            Return to Student Dashboard
+          </button>
+        </div>
       </div>
     );
   }
