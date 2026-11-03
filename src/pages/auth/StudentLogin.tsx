@@ -125,7 +125,25 @@ export const StudentLogin: React.FC = () => {
         </button>
       </form>
 
-      <div className="mt-8 pt-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+      <div className="mt-4 p-3 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-xs text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <span className="font-semibold text-emerald-950">Demo Candidate:</span>{' '}
+          <code className="text-emerald-800 bg-white/70 px-1.5 py-0.5 rounded">CS-2026-9022</code> /{' '}
+          <code className="text-emerald-800 bg-white/70 px-1.5 py-0.5 rounded">Student@1234</code>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setIdentifier('CS-2026-9022');
+            setPassword('Student@1234');
+          }}
+          className="text-xs font-bold text-emerald-700 hover:text-emerald-900 underline underline-offset-2 cursor-pointer self-start sm:self-auto"
+        >
+          Auto-fill
+        </button>
+      </div>
+
+      <div className="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
         <div>
           Don&apos;t have an account?{' '}
           <Link to="/auth/register" className="font-bold text-emerald-600 hover:text-emerald-700 underline underline-offset-2">

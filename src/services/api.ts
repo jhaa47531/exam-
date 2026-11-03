@@ -90,6 +90,11 @@ export const api = {
       }),
     getProfile: () =>
       request<any>('/api/students/profile'),
+    updateProfile: (data: Partial<UserProfile>) =>
+      request<{ success: boolean; profile: UserProfile }>('/api/students/profile', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
     getVerificationStatus: () =>
       request<{ status: string; verification: StudentVerification; logs: any[] }>('/api/students/verification-status'),
     resubmitVerification: (payload: any) =>

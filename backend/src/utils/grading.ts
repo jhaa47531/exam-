@@ -173,12 +173,14 @@ export function validateExamEntryWindow(
     };
   }
 
-  const cutoff = start + lateEntryMinutes * 60 * 1000;
-  if (now > cutoff) {
-    return {
-      allowed: false,
-      reason: `Late entry cutoff exceeded. Students must join within ${lateEntryMinutes} minutes of start time.`,
-    };
+  if (lateEntryMinutes && lateEntryMinutes > 0) {
+    const cutoff = start + lateEntryMinutes * 60 * 1000;
+    if (now > cutoff) {
+      return {
+        allowed: false,
+        reason: `Late entry cutoff exceeded. Students must join within ${lateEntryMinutes} minutes of start time.`,
+      };
+    }
   }
 
   return { allowed: true };

@@ -125,7 +125,25 @@ export const AdminLogin: React.FC = () => {
         </button>
       </form>
 
-      <div className="mt-8 pt-5 border-t border-slate-100 text-center text-xs text-slate-500">
+      <div className="mt-4 p-3 rounded-xl bg-blue-50/70 border border-blue-200/80 text-xs text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <span className="font-semibold text-blue-950">Demo Credentials:</span>{' '}
+          <code className="text-blue-800 bg-white/70 px-1.5 py-0.5 rounded">admin@exampro.edu</code> /{' '}
+          <code className="text-blue-800 bg-white/70 px-1.5 py-0.5 rounded">Admin@1234</code>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setIdentifier('admin@exampro.edu');
+            setPassword('Admin@1234');
+          }}
+          className="text-xs font-bold text-blue-700 hover:text-blue-900 underline underline-offset-2 cursor-pointer self-start sm:self-auto"
+        >
+          Auto-fill
+        </button>
+      </div>
+
+      <div className="mt-6 pt-5 border-t border-slate-100 text-center text-xs text-slate-500">
         Looking for the candidate station?{' '}
         <Link to="/auth/student-login" className="font-bold text-blue-600 hover:text-blue-700 underline underline-offset-2">
           Switch to Student Login &rarr;

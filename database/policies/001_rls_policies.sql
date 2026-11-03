@@ -24,38 +24,73 @@ ALTER TABLE public.exam_holds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 
--- Helper function to check if current user is admin
+-- Helper function to check if current user is admin (SECURITY DEFINER to prevent recursive RLS)
 CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role = 'admin'
+    WHERE id = auth.uid() AND (LOWER(role) = 'admin')
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
--- 2. Profiles Policies
-CREATE POLICY "Public profiles are readable by authenticated users"
+-- Explicit GRANT permissions (Required by PostgreSQL before RLS evaluation)
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+-- Full permissions for backend service_role operations
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO service_role;
+
+-- Authenticated users receive standard CRUD privileges, governed strictly by RLS policies below
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+
+-- Anon users receive read-only access to public course/semester catalog (never to profiles or exams)
+GRANT SELECT ON public.courses, public.semesters TO anon;
+
+-- 2. Profiles Policies (Strict Student Privacy & Role-Based Authorization)
+-- Admins can view all profile records
+CREATE POLICY "Admins can view all profiles"
 ON public.profiles FOR SELECT
-TO authenticated
-USING (true);
-
-CREATE POLICY "Users can update their own profile"
-ON public.profiles FOR UPDATE
-TO authenticated
-USING (auth.uid() = id)
-WITH CHECK (auth.uid() = id AND role = (SELECT role FROM public.profiles WHERE id = auth.uid()));
-
-CREATE POLICY "Admins have full access to profiles"
-ON public.profiles FOR ALL
 TO authenticated
 USING (public.is_admin());
 
--- 3. Courses & Semesters Policies
-CREATE POLICY "Anyone authenticated can view active courses and semesters"
-ON public.courses FOR SELECT
+-- Students can view only their own personal profile record
+CREATE POLICY "Students can view only their own profile"
+ON public.profiles FOR SELECT
 TO authenticated
+USING (auth.uid() = id);
+
+-- Students can update only their own profile and cannot escalate role
+CREATE POLICY "Students can update their own profile"
+ON public.profiles FOR UPDATE
+TO authenticated
+USING (auth.uid() = id)
+WITH CHECK (auth.uid() = id AND LOWER(role) = 'student');
+
+-- Admins have full access to manage all profile records
+CREATE POLICY "Admins have full access to manage profiles"
+ON public.profiles FOR ALL
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+-- Initial profile creation during student registration
+CREATE POLICY "Users can insert their own student profile"
+ON public.profiles FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = id AND LOWER(role) = 'student');
+
+-- 3. Courses & Semesters Policies
+CREATE POLICY "Anyone can view active courses"
+ON public.courses FOR SELECT
+TO anon, authenticated
 USING (is_active = true OR public.is_admin());
 
 CREATE POLICY "Admins have full control over courses"
@@ -63,9 +98,9 @@ ON public.courses FOR ALL
 TO authenticated
 USING (public.is_admin());
 
-CREATE POLICY "Anyone authenticated can view active semesters"
+CREATE POLICY "Anyone can view active semesters"
 ON public.semesters FOR SELECT
-TO authenticated
+TO anon, authenticated
 USING (is_active = true OR public.is_admin());
 
 CREATE POLICY "Admins have full control over semesters"

@@ -11,6 +11,9 @@ router.post('/register', (req, res) => studentController.register(req, res));
 router.get('/profile', authenticateToken, requireStudent, (req, res) =>
   studentController.getProfile(req, res)
 );
+router.put('/profile', authenticateToken, requireStudent, (req, res) =>
+  studentController.updateProfile(req, res)
+);
 router.get('/verification-status', authenticateToken, requireStudent, (req, res) =>
   studentController.getVerificationStatus(req, res)
 );

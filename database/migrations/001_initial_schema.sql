@@ -268,3 +268,14 @@ CREATE INDEX IF NOT EXISTS idx_results_exam ON public.results(exam_id);
 CREATE INDEX IF NOT EXISTS idx_results_student ON public.results(student_id);
 CREATE INDEX IF NOT EXISTS idx_security_events_attempt ON public.security_events(attempt_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id, is_read);
+
+-- ====================================================================
+-- Permissions and Grants
+-- ====================================================================
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+GRANT SELECT ON public.courses, public.semesters TO anon;

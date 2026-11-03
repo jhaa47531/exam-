@@ -5,7 +5,11 @@ import { monitoringService } from '../services/monitoringService';
 
 const router = Router();
 
-// All admin routes require valid authentication and admin role
+// Public course & semester listings (needed for candidate registration and course selection)
+router.get('/courses', (req, res) => adminController.getCourses(req, res));
+router.get('/semesters', (req, res) => adminController.getSemesters(req, res));
+
+// All mutating admin routes and sensitive operations require valid authentication and admin role
 router.use(authenticateToken, requireAdmin);
 
 // Dashboard
@@ -17,13 +21,11 @@ router.get('/verifications', (req, res) => adminController.getVerifications(req,
 router.post('/verifications/:id/approve', (req, res) => adminController.approveVerification(req, res));
 router.post('/verifications/:id/reject', (req, res) => adminController.rejectVerification(req, res));
 
-// Courses & Semesters
-router.get('/courses', (req, res) => adminController.getCourses(req, res));
+// Course & Semester Management (Mutations)
 router.post('/courses', (req, res) => adminController.createCourse(req, res));
 router.put('/courses/:id', (req, res) => adminController.updateCourse(req, res));
 router.delete('/courses/:id', (req, res) => adminController.deleteCourse(req, res));
 
-router.get('/semesters', (req, res) => adminController.getSemesters(req, res));
 router.post('/semesters', (req, res) => adminController.createSemester(req, res));
 
 // Exams

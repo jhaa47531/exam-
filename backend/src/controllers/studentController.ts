@@ -145,6 +145,24 @@ export class StudentController {
     });
   }
 
+  async updateProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const studentId = req.user!.id;
+    const { full_name, phone, avatar_url } = req.body;
+
+    const profile = dataStore.profiles.find((p) => p.id === studentId);
+    if (!profile) {
+      res.status(404).json({ error: 'Profile not found' });
+      return;
+    }
+
+    if (full_name) profile.full_name = String(full_name).trim();
+    if (phone !== undefined) profile.phone = String(phone).trim();
+    if (avatar_url) profile.avatar_url = String(avatar_url).trim();
+    profile.updated_at = new Date().toISOString();
+
+    res.json({ success: true, profile });
+  }
+
   async getVerificationStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
     const studentId = req.user!.id;
     const verification = dataStore.studentVerifications.find((v) => v.student_id === studentId);

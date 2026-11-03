@@ -42,7 +42,8 @@ const RootRedirect: React.FC = () => {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
-  return user.role === 'admin' ? (
+  const role = String(user.role || '').toLowerCase();
+  return role === 'admin' ? (
     <Navigate to="/admin/dashboard" replace />
   ) : (
     <Navigate to="/student/dashboard" replace />
@@ -53,7 +54,8 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
   if (!user) return <Navigate to="/auth/admin-login" replace />;
-  if (user.role !== 'admin') return <Navigate to="/student/dashboard" replace />;
+  const role = String(user.role || '').toLowerCase();
+  if (role !== 'admin') return <Navigate to="/student/dashboard" replace />;
   return <>{children}</>;
 };
 
@@ -61,7 +63,8 @@ const StudentRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const { user, isLoading } = useAuth();
   if (isLoading) return null;
   if (!user) return <Navigate to="/auth/student-login" replace />;
-  if (user.role !== 'student') return <Navigate to="/admin/dashboard" replace />;
+  const role = String(user.role || '').toLowerCase();
+  if (role !== 'student') return <Navigate to="/admin/dashboard" replace />;
   return <>{children}</>;
 };
 
