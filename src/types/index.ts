@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'student';
+export type UserRole = 'admin' | 'student' | 'faculty' | 'teacher';
 
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'unregistered';
 
@@ -17,6 +17,37 @@ export interface UserProfile {
   role: UserRole;
   avatar_url?: string;
   phone?: string;
+  is_active?: boolean;
+  department?: string;
+  designation?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface FacultyMember {
+  id: string;
+  email: string;
+  full_name: string;
+  role: 'faculty' | 'admin';
+  department: string;
+  designation: string;
+  phone?: string;
+  employee_id?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Subject {
+  id: string;
+  code: string;
+  name: string;
+  course_id?: string;
+  semester_id?: string;
+  course_name?: string;
+  semester_name?: string;
+  description?: string;
+  is_active: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -27,6 +58,7 @@ export interface Course {
   name: string;
   description?: string;
   is_active: boolean;
+  is_archived?: boolean;
   semesters?: Semester[];
   studentCount?: number;
   created_at?: string;
@@ -103,6 +135,7 @@ export interface Exam {
   late_entry_policy_minutes: number;
   status: ExamStatus;
   instructions?: string;
+  is_archived?: boolean;
   course_name?: string;
   course_code?: string;
   semester_name?: string;

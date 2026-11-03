@@ -18,6 +18,8 @@ import type {
   ExamHold,
   NotificationItem,
   ActivityLog,
+  FacultyMember,
+  Subject,
 } from '../types';
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -167,6 +169,8 @@ export class ExamProDataStore {
   examHolds: ExamHold[] = [];
   notifications: NotificationItem[] = [];
   activityLogs: ActivityLog[] = [];
+  subjects: Subject[] = [];
+  faculty: FacultyMember[] = [];
   credentials: Map<string, string> = new Map();
 
   constructor() {
@@ -264,6 +268,108 @@ export class ExamProDataStore {
         is_active: true,
         created_at: nowIso,
       });
+    }
+
+    // 3b. Subjects Catalog
+    const subjectsSeed: Subject[] = [
+      {
+        id: 'subj-01',
+        code: 'CS-401',
+        name: 'Database Management Systems & SQL',
+        course_id: 'course-bca',
+        semester_id: 'sem-bca-4',
+        description: 'Relational data modeling, SQL optimization, and database transaction management.',
+        is_active: true,
+        created_at: nowIso,
+      },
+      {
+        id: 'subj-02',
+        code: 'CS-402',
+        name: 'Web Technologies & Cloud Computing',
+        course_id: 'course-bca',
+        semester_id: 'sem-bca-4',
+        description: 'Modern front-end frameworks, REST APIs, and serverless architectures.',
+        is_active: true,
+        created_at: nowIso,
+      },
+      {
+        id: 'subj-03',
+        code: 'CS-403',
+        name: 'Data Structures and Algorithms',
+        course_id: 'course-bca',
+        semester_id: 'sem-bca-3',
+        description: 'Trees, graphs, dynamic programming, and asymptotic computational analysis.',
+        is_active: true,
+        created_at: nowIso,
+      },
+      {
+        id: 'subj-04',
+        code: 'CSE-501',
+        name: 'Computer Networks & Security',
+        course_id: 'course-btech',
+        semester_id: 'sem-btech-5',
+        description: 'TCP/IP stack, routing protocols, cryptography, and network telemetry.',
+        is_active: true,
+        created_at: nowIso,
+      },
+    ];
+    this.subjects.push(...subjectsSeed);
+
+    // 3c. Faculty & Proctors
+    const facultySeed: FacultyMember[] = [
+      {
+        id: 'fac-01',
+        email: 'turing.alan@exampro.edu',
+        full_name: 'Dr. Alan Turing',
+        role: 'faculty',
+        department: 'Computer Science',
+        designation: 'Associate Professor & Proctor',
+        phone: '+1 (555) 789-0123',
+        employee_id: 'FAC-2024-01',
+        is_active: true,
+        created_at: nowIso,
+      },
+      {
+        id: 'fac-02',
+        email: 'grace.hopper@exampro.edu',
+        full_name: 'Prof. Grace Hopper',
+        role: 'faculty',
+        department: 'Information Technology',
+        designation: 'Senior Faculty & Chief Examiner',
+        phone: '+1 (555) 890-1234',
+        employee_id: 'FAC-2024-02',
+        is_active: true,
+        created_at: nowIso,
+      },
+      {
+        id: 'fac-03',
+        email: 'ada.lovelace@exampro.edu',
+        full_name: 'Dr. Ada Lovelace',
+        role: 'faculty',
+        department: 'Software Engineering',
+        designation: 'Professor & Proctor Lead',
+        phone: '+1 (555) 901-2345',
+        employee_id: 'FAC-2024-03',
+        is_active: true,
+        created_at: nowIso,
+      },
+    ];
+    this.faculty.push(...facultySeed);
+    // Add faculty to profiles as well so they are queryable
+    for (const f of facultySeed) {
+      this.profiles.push({
+        id: f.id,
+        email: f.email,
+        full_name: f.full_name,
+        role: 'faculty',
+        department: f.department,
+        designation: f.designation,
+        phone: f.phone,
+        is_active: f.is_active,
+        created_at: f.created_at,
+        updated_at: f.created_at,
+      });
+      this.credentials.set(f.email, 'Faculty@1234');
     }
 
     // 4. Pre-verified Student Candidate (Alex Rivera)

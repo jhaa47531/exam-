@@ -266,6 +266,21 @@ export class StudentController {
 
     res.json({ success: true });
   }
+
+  async deleteNotification(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { id } = req.params;
+    const index = dataStore.notifications.findIndex(
+      (n) => n.id === id && n.user_id === req.user!.id
+    );
+
+    if (index === -1) {
+      res.status(404).json({ error: 'Notification not found' });
+      return;
+    }
+
+    dataStore.notifications.splice(index, 1);
+    res.json({ success: true });
+  }
 }
 
 export const studentController = new StudentController();

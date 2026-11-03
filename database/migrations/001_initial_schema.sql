@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL UNIQUE,
     full_name TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('admin', 'student')) DEFAULT 'student',
+    role TEXT NOT NULL CHECK (role IN ('admin', 'student', 'faculty', 'teacher')) DEFAULT 'student',
     avatar_url TEXT,
     phone TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
@@ -39,6 +39,19 @@ CREATE TABLE IF NOT EXISTS public.semesters (
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     CONSTRAINT unique_course_semester UNIQUE(course_id, semester_number)
+);
+
+-- 4b. Subjects
+CREATE TABLE IF NOT EXISTS public.subjects (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    course_id UUID REFERENCES public.courses(id) ON DELETE SET NULL,
+    semester_id UUID REFERENCES public.semesters(id) ON DELETE SET NULL,
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
 -- 5. Student Enrollments

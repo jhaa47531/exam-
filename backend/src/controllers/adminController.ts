@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { dataStore } from '../config/supabase';
+import { dataStore, supabaseAdmin, isRealSupabaseConfigured } from '../config/supabase';
 import { monitoringService } from '../services/monitoringService';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import type {
@@ -12,6 +12,8 @@ import type {
   VerificationLog,
   NotificationItem,
   AdminAction,
+  FacultyMember,
+  Subject,
 } from '../types';
 
 export class AdminController {
@@ -26,6 +28,8 @@ export class AdminController {
     const rejectedStudents = verifications.filter((v) => v.status === 'rejected').length;
 
     const totalCourses = dataStore.courses.length;
+    const totalFaculty = dataStore.faculty.length;
+    const totalSubjects = dataStore.subjects.length;
     const totalExams = dataStore.exams.length;
     const activeExams = dataStore.exams.filter((e) => e.status === 'published').length;
     const completedExams = dataStore.exams.filter((e) => e.status === 'completed').length;
@@ -52,6 +56,8 @@ export class AdminController {
         pendingVerifications,
         rejectedStudents,
         totalCourses,
+        totalFaculty,
+        totalSubjects,
         totalExams,
         activeExams,
         completedExams,
@@ -82,6 +88,188 @@ export class AdminController {
       });
 
     res.json({ students });
+  }
+
+  async deleteStudent(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { id } = req.params;
+    const archiveRequested = req.query.archive === 'true' || req.body?.archive === true;
+
+    const studentIndex = dataStore.profiles.findIndex(
+      (p) => p.id === id && (p.role === 'student' || !p.role || (p.role as string) === 'archived_student')
+    );
+    if (studentIndex === -1) {
+      res.status(404).json({ error: 'Student record not found' });
+      return;
+    }
+
+    const student = dataStore.profiles[studentIndex];
+
+    // Check historical exam attempts or results
+    const attempts = dataStore.examAttempts.filter((a) => a.student_id === id);
+    const results = dataStore.results.filter((r) => r.student_id === id);
+    const hasAcademicHistory = attempts.length > 0 || results.length > 0;
+
+    if (hasAcademicHistory && !archiveRequested) {
+      res.status(400).json({
+        error: `Cannot permanently delete candidate: Student has ${attempts.length} examination attempt(s) and academic audit records. Archiving is required to preserve academic audit integrity.`,
+        code: 'ACADEMIC_HISTORY_EXISTS',
+        hasAcademicHistory: true,
+        attemptsCount: attempts.length,
+      });
+      return;
+    }
+
+    if (archiveRequested || hasAcademicHistory) {
+      // Soft-delete / Archive student to protect academic integrity
+      student.is_active = false;
+      student.updated_at = new Date().toISOString();
+      const verif = dataStore.studentVerifications.find((v) => v.student_id === id);
+      if (verif) {
+        verif.status = 'rejected';
+        verif.rejection_reason = 'Candidate record deactivated / archived by administrator.';
+        verif.updated_at = new Date().toISOString();
+      }
+      // Remove upcoming unstarted assignments
+      dataStore.examAssignments = dataStore.examAssignments.filter((a) => a.student_id !== id);
+
+      dataStore.adminActions.push({
+        id: `act-${Date.now()}`,
+        admin_id: req.user!.id,
+        target_student_id: id,
+        action_type: 'terminate',
+        details: { reason: 'Archived / Deactivated student record' },
+        created_at: new Date().toISOString(),
+      });
+
+      if (isRealSupabaseConfigured && supabaseAdmin) {
+        try {
+          await supabaseAdmin.from('profiles').update({ updated_at: new Date().toISOString() }).eq('id', id);
+        } catch {}
+      }
+
+      res.json({
+        success: true,
+        archived: true,
+        message: 'Student account successfully archived and deactivated. Academic history preserved.',
+      });
+      return;
+    }
+
+    // Permanent delete when student has NO exam attempts
+    dataStore.profiles.splice(studentIndex, 1);
+    dataStore.studentEnrollments = dataStore.studentEnrollments.filter((e) => e.student_id !== id);
+    dataStore.studentVerifications = dataStore.studentVerifications.filter((v) => v.student_id !== id);
+    dataStore.verificationLogs = dataStore.verificationLogs.filter((l) => l.student_id !== id);
+    dataStore.examAssignments = dataStore.examAssignments.filter((a) => a.student_id !== id);
+    dataStore.notifications = dataStore.notifications.filter((n) => n.user_id !== id);
+
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('profiles').delete().eq('id', id);
+      } catch {}
+    }
+
+    res.json({
+      success: true,
+      archived: false,
+      message: 'Student candidate record deleted successfully.',
+    });
+  }
+
+  // 2b. Faculty Management
+  async getFaculty(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    res.json({ faculty: dataStore.faculty });
+  }
+
+  async createFaculty(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { full_name, email, department, designation, phone, employee_id } = req.body;
+    if (!full_name || !email || !department) {
+      res.status(400).json({ error: 'Full name, email, and department are required' });
+      return;
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = dataStore.faculty.find((f) => f.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      res.status(400).json({ error: 'Faculty member with this email already exists' });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const facultyMember: FacultyMember = {
+      id: `fac-${Date.now()}`,
+      full_name: full_name.trim(),
+      email: cleanEmail,
+      department: department.trim(),
+      designation: designation?.trim() || 'Faculty & Proctor',
+      phone: phone?.trim(),
+      employee_id: employee_id?.trim() || `EMP-${Date.now().toString().slice(-4)}`,
+      role: 'faculty',
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    };
+    dataStore.faculty.push(facultyMember);
+    dataStore.profiles.push({
+      id: facultyMember.id,
+      email: facultyMember.email,
+      full_name: facultyMember.full_name,
+      role: 'faculty',
+      department: facultyMember.department,
+      designation: facultyMember.designation,
+      phone: facultyMember.phone,
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    });
+    dataStore.credentials.set(cleanEmail, 'Faculty@1234');
+
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('profiles').insert({
+          id: facultyMember.id,
+          email: facultyMember.email,
+          full_name: facultyMember.full_name,
+          role: 'faculty',
+          phone: facultyMember.phone,
+          created_at: now,
+          updated_at: now,
+        });
+      } catch {}
+    }
+
+    res.status(201).json({ success: true, faculty: facultyMember });
+  }
+
+  async deleteFaculty(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { id } = req.params;
+    if (req.user?.id === id) {
+      res.status(400).json({ error: 'Cannot delete your own active administrator account' });
+      return;
+    }
+
+    const facIndex = dataStore.faculty.findIndex((f) => f.id === id);
+    if (facIndex === -1) {
+      const profIndex = dataStore.profiles.findIndex((p) => p.id === id && p.role === 'faculty');
+      if (profIndex === -1) {
+        res.status(404).json({ error: 'Faculty member not found' });
+        return;
+      }
+      dataStore.profiles.splice(profIndex, 1);
+    } else {
+      dataStore.faculty.splice(facIndex, 1);
+      const profIndex = dataStore.profiles.findIndex((p) => p.id === id);
+      if (profIndex !== -1) {
+        dataStore.profiles.splice(profIndex, 1);
+      }
+    }
+
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('profiles').delete().eq('id', id);
+      } catch {}
+    }
+
+    res.json({ success: true, message: 'Faculty member deleted successfully.' });
   }
 
   async getVerifications(_req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -271,19 +459,60 @@ export class AdminController {
 
   async deleteCourse(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { id } = req.params;
+    const archiveRequested = req.query.archive === 'true' || req.body?.archive === true;
+
+    const courseIndex = dataStore.courses.findIndex((c) => c.id === id);
+    if (courseIndex === -1) {
+      res.status(404).json({ error: 'Course program not found' });
+      return;
+    }
+
+    const course = dataStore.courses[courseIndex];
     const enrolledStudents = dataStore.studentEnrollments.filter((e) => e.course_id === id);
-    if (enrolledStudents.length > 0) {
+
+    if (enrolledStudents.length > 0 && !archiveRequested) {
       res.status(400).json({
-        error: `Cannot delete course: ${enrolledStudents.length} students are currently enrolled. Deactivate instead.`,
+        error: `Cannot permanently delete course: ${enrolledStudents.length} candidate(s) are currently enrolled. Select Archive Course to safely deactivate without breaking student enrollments.`,
+        code: 'ENROLLED_STUDENTS_EXIST',
+        enrolledCount: enrolledStudents.length,
       });
       return;
     }
 
-    const index = dataStore.courses.findIndex((c) => c.id === id);
-    if (index !== -1) {
-      dataStore.courses.splice(index, 1);
+    if (archiveRequested) {
+      course.is_active = false;
+      course.is_archived = true;
+      course.updated_at = new Date().toISOString();
+
+      if (isRealSupabaseConfigured && supabaseAdmin) {
+        try {
+          await supabaseAdmin.from('courses').update({ is_active: false }).eq('id', id);
+        } catch {}
+      }
+
+      res.json({
+        success: true,
+        archived: true,
+        message: 'Course program successfully archived and deactivated.',
+      });
+      return;
     }
-    res.json({ success: true });
+
+    // Permanent delete when no students are enrolled
+    dataStore.courses.splice(courseIndex, 1);
+    dataStore.semesters = dataStore.semesters.filter((s) => s.course_id !== id);
+
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('courses').delete().eq('id', id);
+      } catch {}
+    }
+
+    res.json({
+      success: true,
+      archived: false,
+      message: 'Course program and associated terms deleted successfully.',
+    });
   }
 
   async getSemesters(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -312,7 +541,138 @@ export class AdminController {
     };
     dataStore.semesters.push(semester);
 
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('semesters').insert(semester);
+      } catch {}
+    }
+
     res.status(201).json({ success: true, semester });
+  }
+
+  async deleteSemester(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { id } = req.params;
+    const semIndex = dataStore.semesters.findIndex((s) => s.id === id);
+    if (semIndex === -1) {
+      res.status(404).json({ error: 'Semester term not found' });
+      return;
+    }
+
+    // Check if active exams are scheduled for this semester
+    const activeExams = dataStore.exams.filter((e) => e.semester_id === id && e.status === 'published');
+    if (activeExams.length > 0) {
+      res.status(400).json({
+        error: `Cannot delete semester: ${activeExams.length} active examination(s) are currently scheduled for this term. Complete or cancel the examinations first.`,
+        code: 'ACTIVE_EXAMS_EXIST',
+      });
+      return;
+    }
+
+    dataStore.semesters.splice(semIndex, 1);
+
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('semesters').delete().eq('id', id);
+      } catch {}
+    }
+
+    res.json({ success: true, message: 'Semester term deleted successfully.' });
+  }
+
+  // 3b. Subject Catalog Management
+  async getSubjects(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { course_id, semester_id } = req.query;
+    let list = dataStore.subjects;
+    if (course_id) {
+      list = list.filter((s) => s.course_id === course_id);
+    }
+    if (semester_id) {
+      list = list.filter((s) => s.semester_id === semester_id);
+    }
+
+    const enriched = list.map((s) => {
+      const course = dataStore.courses.find((c) => c.id === s.course_id);
+      const semester = dataStore.semesters.find((sem) => sem.id === s.semester_id);
+      return {
+        ...s,
+        course_name: course?.name || 'N/A',
+        course_code: course?.code || '',
+        semester_name: semester?.name || 'N/A',
+      };
+    });
+
+    res.json({ subjects: enriched });
+  }
+
+  async createSubject(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { code, name, course_id, semester_id, description } = req.body;
+    if (!code || !name) {
+      res.status(400).json({ error: 'Subject code and title are required' });
+      return;
+    }
+
+    const cleanCode = code.trim().toUpperCase();
+    const existing = dataStore.subjects.find((s) => s.code.toUpperCase() === cleanCode);
+    if (existing) {
+      res.status(400).json({ error: 'A subject with this subject code already exists' });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const subject: Subject = {
+      id: `subj-${Date.now()}`,
+      code: cleanCode,
+      name: name.trim(),
+      course_id: course_id || undefined,
+      semester_id: semester_id || undefined,
+      description: description?.trim() || '',
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    };
+    dataStore.subjects.push(subject);
+
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('subjects').insert(subject);
+      } catch {}
+    }
+
+    res.status(201).json({ success: true, subject });
+  }
+
+  async deleteSubject(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { id } = req.params;
+    const index = dataStore.subjects.findIndex((s) => s.id === id);
+    if (index === -1) {
+      res.status(404).json({ error: 'Subject not found' });
+      return;
+    }
+
+    const subject = dataStore.subjects[index];
+    const relatedExams = dataStore.exams.filter(
+      (e) =>
+        e.subject.toLowerCase() === subject.name.toLowerCase() ||
+        e.subject.toLowerCase() === subject.code.toLowerCase()
+    );
+
+    if (relatedExams.length > 0 && req.query.force !== 'true') {
+      res.status(400).json({
+        error: `Cannot delete subject: ${relatedExams.length} examination(s) reference this subject. Archive or remove the examinations first, or confirm forced removal.`,
+        code: 'EXAMS_ATTACHED',
+      });
+      return;
+    }
+
+    dataStore.subjects.splice(index, 1);
+
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('subjects').delete().eq('id', id);
+      } catch {}
+    }
+
+    res.json({ success: true, message: 'Subject deleted successfully.' });
   }
 
   // 4. Exam Management
@@ -438,20 +798,65 @@ export class AdminController {
 
   async deleteExam(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { id } = req.params;
-    const index = dataStore.exams.findIndex((e) => e.id === id);
-    if (index !== -1) {
-      dataStore.exams.splice(index, 1);
-      // clean up assignments and questions
-      dataStore.examAssignments = dataStore.examAssignments.filter((a) => a.exam_id !== id);
-      const questionIds = new Set(
-        dataStore.questions.filter((q) => q.exam_id === id).map((q) => q.id)
-      );
-      dataStore.questions = dataStore.questions.filter((q) => q.exam_id !== id);
-      dataStore.questionOptions = dataStore.questionOptions.filter(
-        (o) => !questionIds.has(o.question_id)
-      );
+    const archiveRequested = req.query.archive === 'true' || req.body?.archive === true;
+
+    const examIndex = dataStore.exams.findIndex((e) => e.id === id);
+    if (examIndex === -1) {
+      res.status(404).json({ error: 'Examination record not found' });
+      return;
     }
-    res.json({ success: true });
+
+    const exam = dataStore.exams[examIndex];
+    const attempts = dataStore.examAttempts.filter((a) => a.exam_id === id);
+    const hasAttempts = attempts.length > 0;
+
+    if (hasAttempts && !archiveRequested) {
+      res.status(400).json({
+        error: `This examination has ${attempts.length} candidate attempt(s). Permanent deletion is blocked to protect student examination history. Select Archive Exam to safely cancel and preserve audit records.`,
+        code: 'ATTEMPTS_EXIST',
+        attemptsCount: attempts.length,
+      });
+      return;
+    }
+
+    if (archiveRequested || hasAttempts) {
+      // Archive / cancel exam safely to preserve academic audit trail
+      exam.status = 'cancelled';
+      exam.is_archived = true;
+      exam.updated_at = new Date().toISOString();
+
+      if (isRealSupabaseConfigured && supabaseAdmin) {
+        try {
+          await supabaseAdmin.from('exams').update({ status: 'cancelled' }).eq('id', id);
+        } catch {}
+      }
+
+      res.json({
+        success: true,
+        archived: true,
+        message: 'Examination successfully archived and cancelled. Candidate attempt records preserved.',
+      });
+      return;
+    }
+
+    // Permanent delete when no attempts exist
+    dataStore.exams.splice(examIndex, 1);
+    dataStore.examAssignments = dataStore.examAssignments.filter((a) => a.exam_id !== id);
+    const questionIds = new Set(
+      dataStore.questions.filter((q) => q.exam_id === id).map((q) => q.id)
+    );
+    dataStore.questions = dataStore.questions.filter((q) => q.exam_id !== id);
+    dataStore.questionOptions = dataStore.questionOptions.filter(
+      (o) => !questionIds.has(o.question_id)
+    );
+
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('exams').delete().eq('id', id);
+      } catch {}
+    }
+
+    res.json({ success: true, message: 'Examination deleted successfully.' });
   }
 
   async assignExam(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -786,10 +1191,49 @@ export class AdminController {
     res.json({ success: true, result });
   }
 
-  // 8. Activity Logs
+  // 8. Activity Logs & Notifications Deletion
   async getActivityLogs(_req: AuthenticatedRequest, res: Response): Promise<void> {
     const logs = dataStore.activityLogs.slice(-50).reverse();
     res.json({ logs });
+  }
+
+  async clearActivityLogs(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    dataStore.activityLogs = [];
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('activity_logs').delete().neq('id', '0');
+      } catch {}
+    }
+    res.json({ success: true, message: 'Activity logs cleared successfully.' });
+  }
+
+  async deleteActivityLog(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { id } = req.params;
+    dataStore.activityLogs = dataStore.activityLogs.filter((l) => l.id !== id);
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('activity_logs').delete().eq('id', id);
+      } catch {}
+    }
+    res.json({ success: true, message: 'Log record removed successfully.' });
+  }
+
+  // 9. Admin Notifications Deletion
+  async deleteNotification(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { id } = req.params;
+    const index = dataStore.notifications.findIndex((n) => n.id === id);
+    if (index === -1) {
+      res.status(404).json({ error: 'Notification not found' });
+      return;
+    }
+
+    dataStore.notifications.splice(index, 1);
+    if (isRealSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('notifications').delete().eq('id', id);
+      } catch {}
+    }
+    res.json({ success: true, message: 'Notification deleted successfully.' });
   }
 }
 

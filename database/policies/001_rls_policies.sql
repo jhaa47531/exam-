@@ -260,10 +260,90 @@ ON public.security_events FOR SELECT
 TO authenticated
 USING (public.is_admin());
 
--- 11. Storage Policies for Private College ID Bucket ('college-id-cards')
--- Bucket is private:
--- INSERT INTO storage.buckets (id, name, public) VALUES ('college-id-cards', 'college-id-cards', false) ON CONFLICT DO NOTHING;
+CREATE POLICY "Admins can delete security events"
+ON public.security_events FOR DELETE
+TO authenticated
+USING (public.is_admin());
 
+-- 11. Student Enrollments Policies
+CREATE POLICY "Admins have full access to student enrollments"
+ON public.student_enrollments FOR ALL
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+CREATE POLICY "Students can view their own enrollment"
+ON public.student_enrollments FOR SELECT
+TO authenticated
+USING (student_id = auth.uid() OR public.is_admin());
+
+-- 12. Verification Logs Policies
+CREATE POLICY "Admins have full access to verification logs"
+ON public.verification_logs FOR ALL
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+CREATE POLICY "Students can view their verification logs"
+ON public.verification_logs FOR SELECT
+TO authenticated
+USING (student_id = auth.uid() OR public.is_admin());
+
+-- 13. Exam Assignments Policies
+CREATE POLICY "Admins have full access to exam assignments"
+ON public.exam_assignments FOR ALL
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+CREATE POLICY "Students can view their own exam assignments"
+ON public.exam_assignments FOR SELECT
+TO authenticated
+USING (student_id = auth.uid() OR public.is_admin());
+
+-- 14. Admin Actions & Holds Policies
+CREATE POLICY "Admins have full access to admin actions"
+ON public.admin_actions FOR ALL
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+CREATE POLICY "Admins have full access to exam holds"
+ON public.exam_holds FOR ALL
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+-- 15. Notifications Policies (Admins can delete, Users can view and delete their own)
+CREATE POLICY "Users can view their own notifications"
+ON public.notifications FOR SELECT
+TO authenticated
+USING (user_id = auth.uid() OR public.is_admin());
+
+CREATE POLICY "Users can update their own notifications"
+ON public.notifications FOR UPDATE
+TO authenticated
+USING (user_id = auth.uid() OR public.is_admin());
+
+CREATE POLICY "Users can delete their own notifications"
+ON public.notifications FOR DELETE
+TO authenticated
+USING (user_id = auth.uid() OR public.is_admin());
+
+CREATE POLICY "Admins have full access to notifications"
+ON public.notifications FOR ALL
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+-- 16. Activity Logs Policies
+CREATE POLICY "Admins have full access to activity logs"
+ON public.activity_logs FOR ALL
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+-- 17. Storage Policies for Private College ID Bucket ('college-id-cards')
 CREATE POLICY "Students upload their own ID card"
 ON storage.objects FOR INSERT
 TO authenticated
@@ -287,3 +367,4 @@ USING (
   bucket_id = 'college-id-cards' AND
   public.is_admin()
 );
+

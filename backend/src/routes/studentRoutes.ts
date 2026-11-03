@@ -34,5 +34,8 @@ router.get('/notifications', authenticateToken, requireStudent, (req, res) =>
 router.put('/notifications/:id/read', authenticateToken, requireStudent, (req, res) =>
   studentController.markNotificationRead(req, res)
 );
+router.delete('/notifications/:id', authenticateToken, requireStudent, (req, res) =>
+  studentController.deleteNotification(req, res)
+);
 
 export default router;

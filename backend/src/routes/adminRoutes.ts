@@ -17,9 +17,15 @@ router.get('/dashboard', (req, res) => adminController.getDashboardStats(req, re
 
 // Students & Verifications
 router.get('/students', (req, res) => adminController.getStudents(req, res));
+router.delete('/students/:id', (req, res) => adminController.deleteStudent(req, res));
 router.get('/verifications', (req, res) => adminController.getVerifications(req, res));
 router.post('/verifications/:id/approve', (req, res) => adminController.approveVerification(req, res));
 router.post('/verifications/:id/reject', (req, res) => adminController.rejectVerification(req, res));
+
+// Faculty Management
+router.get('/faculty', (req, res) => adminController.getFaculty(req, res));
+router.post('/faculty', (req, res) => adminController.createFaculty(req, res));
+router.delete('/faculty/:id', (req, res) => adminController.deleteFaculty(req, res));
 
 // Course & Semester Management (Mutations)
 router.post('/courses', (req, res) => adminController.createCourse(req, res));
@@ -27,6 +33,12 @@ router.put('/courses/:id', (req, res) => adminController.updateCourse(req, res))
 router.delete('/courses/:id', (req, res) => adminController.deleteCourse(req, res));
 
 router.post('/semesters', (req, res) => adminController.createSemester(req, res));
+router.delete('/semesters/:id', (req, res) => adminController.deleteSemester(req, res));
+
+// Subject Catalog Management
+router.get('/subjects', (req, res) => adminController.getSubjects(req, res));
+router.post('/subjects', (req, res) => adminController.createSubject(req, res));
+router.delete('/subjects/:id', (req, res) => adminController.deleteSubject(req, res));
 
 // Exams
 router.get('/exams', (req, res) => adminController.getExams(req, res));
@@ -68,7 +80,10 @@ router.post('/results/:attempt_id/questions/:question_id/grade', (req, res) =>
   adminController.gradeWrittenAnswer(req, res)
 );
 
-// Audit Activity Logs
+// Audit Activity Logs & Notifications
 router.get('/activity-logs', (req, res) => adminController.getActivityLogs(req, res));
+router.delete('/activity-logs', (req, res) => adminController.clearActivityLogs(req, res));
+router.delete('/activity-logs/:id', (req, res) => adminController.deleteActivityLog(req, res));
+router.delete('/notifications/:id', (req, res) => adminController.deleteNotification(req, res));
 
 export default router;

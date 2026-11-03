@@ -110,6 +110,8 @@ export const api = {
       request<{ notifications: NotificationItem[] }>('/api/students/notifications'),
     markNotificationRead: (id: string) =>
       request<{ success: boolean }>(`/api/students/notifications/${id}/read`, { method: 'PUT' }),
+    deleteNotification: (id: string) =>
+      request<{ success: boolean }>(`/api/students/notifications/${id}`, { method: 'DELETE' }),
   },
 
   // Exam taking
