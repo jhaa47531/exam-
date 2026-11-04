@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Shield,
   Search,
+  BookMarked,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -60,8 +61,10 @@ export const AdminLayout: React.FC = () => {
       badgeColor: 'bg-amber-100 text-amber-800 border border-amber-200',
     },
     { name: 'Student Management', path: '/admin/students', icon: Users },
+    { name: 'Faculty & Teachers', path: '/admin/faculty', icon: GraduationCap },
     { name: 'Course Management', path: '/admin/courses', icon: BookOpen },
     { name: 'Semester Management', path: '/admin/semesters', icon: CalendarDays },
+    { name: 'Subject Catalog', path: '/admin/subjects', icon: BookMarked },
     { name: 'Exam Management', path: '/admin/exams', icon: FileSpreadsheet },
     { name: 'Question Management', path: '/admin/questions', icon: HelpCircle },
     { name: 'Exam Assignments', path: '/admin/assignments', icon: UserPlus },

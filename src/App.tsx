@@ -36,6 +36,8 @@ import { ResultsManagement } from './pages/admin/ResultsManagement';
 import { ReportsAnalytics } from './pages/admin/ReportsAnalytics';
 import { ActivityLogs } from './pages/admin/ActivityLogs';
 import { AdminSettings } from './pages/admin/AdminSettings';
+import { FacultyManagement } from './pages/admin/FacultyManagement';
+import { SubjectManagement } from './pages/admin/SubjectManagement';
 
 // Route Guards
 const RootRedirect: React.FC = () => {
@@ -129,8 +131,10 @@ export default function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="verifications" element={<StudentVerification />} />
             <Route path="students" element={<StudentManagement />} />
+            <Route path="faculty" element={<FacultyManagement />} />
             <Route path="courses" element={<CourseManagement />} />
             <Route path="semesters" element={<SemesterManagement />} />
+            <Route path="subjects" element={<SubjectManagement />} />
             <Route path="exams" element={<ExamManagement />} />
             <Route path="questions" element={<QuestionManagement />} />
             <Route path="assignments" element={<ExamAssignments />} />

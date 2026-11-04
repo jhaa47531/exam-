@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api, tokenStorage } from '../services/api';
-import type { UserProfile, StudentVerification, StudentEnrollment } from '../types';
+import type { UserProfile, UserRole, StudentVerification, StudentEnrollment } from '../types';
 
 interface AuthContextType {
   user: UserProfile | null;
-  role: 'admin' | 'student' | null;
+  role: UserRole | null;
   token: string | null;
   verification: StudentVerification | null;
   enrollment: StudentEnrollment | null;

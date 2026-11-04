@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { DeleteConfirmModal } from '../../components/common/DeleteConfirmModal';
 
 export const QuestionManagement: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -20,6 +21,13 @@ export const QuestionManagement: React.FC = () => {
   const [selectedExamId, setSelectedExamId] = useState<string>(searchParams.get('exam_id') || '');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Deletion Modal
+  const [targetQuestion, setTargetQuestion] = useState<Question | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [bannerMessage, setBannerMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
 
   // Add Question Modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -103,25 +111,40 @@ export const QuestionManagement: React.FC = () => {
 
       setShowAddModal(false);
       resetModalForm();
+      setBannerMessage({ type: 'success', text: 'Question added successfully to question bank.' });
       await loadQuestions(selectedExamId);
       const exRes = await api.admin.getExams();
       setExams(exRes.exams || []);
     } catch (err: any) {
-      alert(err.message || 'Failed to add question');
+      setBannerMessage({ type: 'error', text: err.message || 'Failed to add question' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this question?')) return;
+  const openDeleteModal = (question: Question) => {
+    setTargetQuestion(question);
+    setDeleteError(null);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!targetQuestion) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+
     try {
-      await api.admin.deleteQuestion(id);
+      await api.admin.deleteQuestion(targetQuestion.id);
+      setDeleteModalOpen(false);
+      setTargetQuestion(null);
+      setBannerMessage({ type: 'success', text: 'Question removed from examination successfully.' });
       await loadQuestions(selectedExamId);
       const exRes = await api.admin.getExams();
       setExams(exRes.exams || []);
     } catch (err: any) {
-      alert(err.message || 'Delete failed');
+      setDeleteError(err.message || 'Failed to delete question');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -226,7 +249,7 @@ export const QuestionManagement: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => handleDelete(q.id)}
+                  onClick={() => openDeleteModal(q)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                   title="Delete question"
                 >
@@ -469,6 +492,24 @@ export const QuestionManagement: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteModalOpen}
+        title="Delete Question"
+        message={`Are you sure you want to delete this question? "${targetQuestion?.question_text}"`}
+        academicWarning="Deleting this question will recalculate the examination's total marks and total question count."
+        confirmText="Delete Question"
+        isArchiveOptionAvailable={false}
+        onConfirm={handleConfirmDelete}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setTargetQuestion(null);
+          setDeleteError(null);
+        }}
+        isLoading={isDeleting}
+        error={deleteError}
+      />
     </div>
   );
 };

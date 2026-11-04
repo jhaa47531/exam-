@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import type { NotificationItem } from '../../types';
-import { Bell, CheckCircle2, AlertTriangle, Info, Clock, Check } from 'lucide-react';
+import { Bell, CheckCircle2, AlertTriangle, Info, Clock, Check, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export const StudentNotifications: React.FC = () => {
@@ -29,6 +29,15 @@ export const StudentNotifications: React.FC = () => {
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    try {
+      await api.student.deleteNotification(id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
     } catch (err) {
       console.error(err);
     }
@@ -97,15 +106,24 @@ export const StudentNotifications: React.FC = () => {
                   <p className="text-xs text-slate-600 leading-relaxed">{notif.message}</p>
                 </div>
 
-                {!notif.is_read && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {!notif.is_read && (
+                    <button
+                      onClick={() => handleMarkAsRead(notif.id)}
+                      className="p-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-800 border border-slate-200 transition cursor-pointer shadow-xs"
+                      title="Mark as read"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleMarkAsRead(notif.id)}
-                    className="p-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-800 border border-slate-200 transition shrink-0 cursor-pointer shadow-xs"
-                    title="Mark as read"
+                    onClick={() => handleDeleteNotification(notif.id)}
+                    className="p-1.5 rounded-xl bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition cursor-pointer shadow-xs"
+                    title="Delete notification"
                   >
-                    <Check className="w-4 h-4" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
-                )}
+                </div>
               </motion.div>
             );
           })}

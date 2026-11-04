@@ -8,6 +8,7 @@
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.semesters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.student_enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.student_verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.verification_logs ENABLE ROW LEVEL SECURITY;
@@ -105,6 +106,17 @@ USING (is_active = true OR public.is_admin());
 
 CREATE POLICY "Admins have full control over semesters"
 ON public.semesters FOR ALL
+TO authenticated
+USING (public.is_admin());
+
+-- 3b. Subjects Policies
+CREATE POLICY "Anyone can view active subjects"
+ON public.subjects FOR SELECT
+TO anon, authenticated
+USING (is_active = true OR public.is_admin());
+
+CREATE POLICY "Admins have full control over subjects"
+ON public.subjects FOR ALL
 TO authenticated
 USING (public.is_admin());
 

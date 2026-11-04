@@ -15,15 +15,24 @@ import {
   AlertCircle,
   ExternalLink,
   X,
+  Archive,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { DeleteConfirmModal } from '../../components/common/DeleteConfirmModal';
 
 export const ExamManagement: React.FC = () => {
   const [exams, setExams] = useState<Exam[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Deletion Modal
+  const [targetExam, setTargetExam] = useState<Exam | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [bannerMessage, setBannerMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
 
   // Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -105,21 +114,63 @@ export const ExamManagement: React.FC = () => {
       });
       setShowCreateModal(false);
       resetForm();
+      setBannerMessage({ type: 'success', text: `Examination "${title}" scheduled and published successfully.` });
       await loadData();
     } catch (err: any) {
-      alert(err.message || 'Failed to create exam');
+      setBannerMessage({ type: 'error', text: err.message || 'Failed to create exam' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteExam = async (id: string) => {
-    if (!window.confirm('Delete this examination? Questions and assignments will also be removed.')) return;
+  const openDeleteModal = (exam: Exam) => {
+    setTargetExam(exam);
+    setDeleteError(null);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!targetExam) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+
     try {
-      await api.admin.deleteExam(id);
+      const res = await api.admin.deleteExam(targetExam.id, { archive: false });
+      setDeleteModalOpen(false);
+      setTargetExam(null);
+      setBannerMessage({
+        type: 'success',
+        text: res.message || `Examination "${targetExam.title}" deleted successfully.`,
+      });
       await loadData();
     } catch (err: any) {
-      alert(err.message || 'Delete failed');
+      setDeleteError(
+        err.message ||
+          'Failed to permanently delete exam. If candidates have attempted this examination, select Archive Exam to preserve student test submissions and scores.'
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleArchiveExam = async () => {
+    if (!targetExam) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const res = await api.admin.deleteExam(targetExam.id, { archive: true });
+      setDeleteModalOpen(false);
+      setTargetExam(null);
+      setBannerMessage({
+        type: 'info',
+        text: res.message || `Examination "${targetExam.title}" cancelled and archived. Student scores preserved.`,
+      });
+      await loadData();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to archive exam.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -147,6 +198,37 @@ export const ExamManagement: React.FC = () => {
           <span>Create New Exam</span>
         </button>
       </div>
+
+      {bannerMessage && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-4 rounded-2xl flex items-center justify-between gap-3 text-xs font-semibold shadow-xs ${
+            bannerMessage.type === 'success'
+              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+              : bannerMessage.type === 'info'
+              ? 'bg-blue-50 border border-blue-200 text-blue-800'
+              : 'bg-rose-50 border border-rose-200 text-rose-800'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {bannerMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : bannerMessage.type === 'info' ? (
+              <Archive className="w-4 h-4 text-blue-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{bannerMessage.text}</span>
+          </div>
+          <button
+            onClick={() => setBannerMessage(null)}
+            className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </motion.div>
+      )}
 
       {/* Exams Grid */}
       {loading ? (
@@ -219,9 +301,9 @@ export const ExamManagement: React.FC = () => {
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleDeleteExam(exam.id)}
+                    onClick={() => openDeleteModal(exam)}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                    title="Delete Exam"
+                    title="Delete or Archive Exam"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -487,6 +569,26 @@ export const ExamManagement: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete / Archive Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteModalOpen}
+        title="Delete Examination"
+        message={`Are you sure you want to delete examination "${targetExam?.title}" (${targetExam?.subject})?`}
+        academicWarning="If students have already started or submitted attempts for this examination, permanent deletion is blocked to prevent data loss. Select Archive Exam to safely cancel the exam while preserving candidate scores and answer submissions."
+        confirmText="Permanently Delete"
+        archiveText="Archive & Cancel Exam"
+        isArchiveOptionAvailable={true}
+        onConfirm={handleConfirmDelete}
+        onArchive={handleArchiveExam}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setTargetExam(null);
+          setDeleteError(null);
+        }}
+        isLoading={isDeleting}
+        error={deleteError}
+      />
     </div>
   );
 };

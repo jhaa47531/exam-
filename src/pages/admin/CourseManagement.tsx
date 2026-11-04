@@ -1,14 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import type { Course } from '../../types';
-import { BookOpen, PlusCircle, Trash2, Edit, CheckCircle2, XCircle, Users, X } from 'lucide-react';
+import {
+  BookOpen,
+  PlusCircle,
+  Trash2,
+  Edit,
+  CheckCircle2,
+  XCircle,
+  Users,
+  X,
+  Archive,
+  AlertCircle,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { DeleteConfirmModal } from '../../components/common/DeleteConfirmModal';
 
 export const CourseManagement: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal
+  // Create / Edit Modal
   const [showModal, setShowModal] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [code, setCode] = useState('');
@@ -16,6 +28,14 @@ export const CourseManagement: React.FC = () => {
   const [description, setDescription] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Deletion Modal
+  const [targetCourse, setTargetCourse] = useState<Course | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [bannerMessage, setBannerMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     loadCourses();
@@ -26,8 +46,9 @@ export const CourseManagement: React.FC = () => {
     try {
       const res = await api.admin.getCourses();
       setCourses(res.courses || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setBannerMessage({ type: 'error', text: err.message || 'Failed to load course programs' });
     } finally {
       setLoading(false);
     }
@@ -39,6 +60,7 @@ export const CourseManagement: React.FC = () => {
     setName('');
     setDescription('');
     setIsActive(true);
+    setFormError(null);
     setShowModal(true);
   };
 
@@ -48,12 +70,14 @@ export const CourseManagement: React.FC = () => {
     setName(course.name);
     setDescription(course.description || '');
     setIsActive(course.is_active);
+    setFormError(null);
     setShowModal(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setFormError(null);
     try {
       if (editingCourse) {
         await api.admin.updateCourse(editingCourse.id, {
@@ -62,6 +86,7 @@ export const CourseManagement: React.FC = () => {
           description,
           is_active: isActive,
         });
+        setBannerMessage({ type: 'success', text: `Course ${code} updated successfully.` });
       } else {
         await api.admin.createCourse({
           code,
@@ -69,23 +94,65 @@ export const CourseManagement: React.FC = () => {
           description,
           is_active: isActive,
         });
+        setBannerMessage({ type: 'success', text: `Course ${code} created successfully.` });
       }
       setShowModal(false);
       await loadCourses();
     } catch (err: any) {
-      alert(err.message || 'Operation failed');
+      setFormError(err.message || 'Operation failed');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this course program?')) return;
+  const openDeleteModal = (course: Course) => {
+    setTargetCourse(course);
+    setDeleteError(null);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!targetCourse) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+
     try {
-      await api.admin.deleteCourse(id);
+      const res = await api.admin.deleteCourse(targetCourse.id, { archive: false });
+      setDeleteModalOpen(false);
+      setTargetCourse(null);
+      setBannerMessage({
+        type: 'success',
+        text: res.message || `Course program ${targetCourse.code} deleted successfully.`,
+      });
       await loadCourses();
     } catch (err: any) {
-      alert(err.message || 'Cannot delete course');
+      setDeleteError(
+        err.message ||
+          'Cannot permanently delete this course program. If candidates are enrolled, choose Archive Course to deactivate it safely without breaking student enrollments.'
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleArchiveCourse = async () => {
+    if (!targetCourse) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const res = await api.admin.deleteCourse(targetCourse.id, { archive: true });
+      setDeleteModalOpen(false);
+      setTargetCourse(null);
+      setBannerMessage({
+        type: 'info',
+        text: res.message || `Course program ${targetCourse.code} archived successfully.`,
+      });
+      await loadCourses();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to archive course program.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -94,7 +161,9 @@ export const CourseManagement: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Course Program Management</h1>
-          <p className="text-xs text-slate-500 mt-1">Configure academic programs (BCA, MCA, BBA, BCom) and assigned cohorts</p>
+          <p className="text-xs text-slate-500 mt-1">
+            Configure academic programs (BCA, MCA, BBA, BCom) and assigned cohorts
+          </p>
         </div>
 
         <button
@@ -105,6 +174,37 @@ export const CourseManagement: React.FC = () => {
           <span>Add New Course</span>
         </button>
       </div>
+
+      {bannerMessage && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-4 rounded-2xl flex items-center justify-between gap-3 text-xs font-semibold shadow-xs ${
+            bannerMessage.type === 'success'
+              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+              : bannerMessage.type === 'info'
+              ? 'bg-blue-50 border border-blue-200 text-blue-800'
+              : 'bg-rose-50 border border-rose-200 text-rose-800'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {bannerMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : bannerMessage.type === 'info' ? (
+              <Archive className="w-4 h-4 text-blue-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{bannerMessage.text}</span>
+          </div>
+          <button
+            onClick={() => setBannerMessage(null)}
+            className="text-slate-400 hover:text-slate-700 text-xs font-bold cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </motion.div>
+      )}
 
       {loading ? (
         <div className="p-16 text-center text-slate-400 text-xs">
@@ -144,7 +244,9 @@ export const CourseManagement: React.FC = () => {
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
                   <div className="flex items-center gap-1.5 text-slate-500 font-medium">
                     <Users className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Enrolled Students: <strong className="text-slate-900">{course.studentCount || 0}</strong></span>
+                    <span>
+                      Enrolled Students: <strong className="text-slate-900">{course.studentCount || 0}</strong>
+                    </span>
                   </div>
                   <div className="text-slate-500 font-medium">
                     Semesters: <strong className="text-slate-900">{course.semesters?.length || 2}</strong>
@@ -161,9 +263,9 @@ export const CourseManagement: React.FC = () => {
                   <Edit className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => handleDelete(course.id)}
+                  onClick={() => openDeleteModal(course)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                  title="Delete Course"
+                  title="Delete or Archive Course"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -173,7 +275,7 @@ export const CourseManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Course Modal */}
+      {/* Course Create/Edit Modal */}
       <AnimatePresence>
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
@@ -196,75 +298,77 @@ export const CourseManagement: React.FC = () => {
                 </button>
               </div>
 
+              {formError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
+                  {formError}
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Program Code *
+                    Course Code (e.g., BCA, MCA, BBA)
                   </label>
                   <input
                     type="text"
                     required
                     value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    placeholder="e.g. BCA"
-                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none transition"
+                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    placeholder="BCA"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-blue-500 font-mono font-bold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Full Program Name *
-                  </label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Program Full Title</label>
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Bachelor of Computer Applications"
-                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none transition"
+                    placeholder="Bachelor of Computer Applications"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Curriculum Description
-                  </label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Description</label>
                   <textarea
                     rows={3}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Software engineering, databases, algorithms, and cloud computing..."
-                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-3 focus:ring-blue-500/10 rounded-xl p-3 text-xs text-slate-900 outline-none transition"
+                    placeholder="Three-year undergraduate program focusing on computer science, programming..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:bg-white focus:border-blue-500 resize-none"
                   />
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 pt-1">
                   <input
                     type="checkbox"
-                    id="isActiveToggle"
+                    id="isActiveCheckbox"
                     checked={isActive}
                     onChange={(e) => setIsActive(e.target.checked)}
                     className="rounded border-slate-300 text-blue-600 focus:ring-0 cursor-pointer"
                   />
-                  <label htmlFor="isActiveToggle" className="text-xs font-semibold text-slate-700 cursor-pointer">
-                    Program is currently active for exam enrollments
+                  <label htmlFor="isActiveCheckbox" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                    Course is active for candidate registration
                   </label>
                 </div>
 
-                <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-sm transition cursor-pointer"
+                    className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition cursor-pointer shadow-sm disabled:opacity-50"
                   >
-                    {isSubmitting ? 'Saving...' : 'Save Course'}
+                    {isSubmitting ? 'Saving...' : editingCourse ? 'Save Changes' : 'Create Program'}
                   </button>
                 </div>
               </form>
@@ -272,6 +376,30 @@ export const CourseManagement: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete / Archive Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteModalOpen}
+        title="Delete Course Program"
+        message={`Are you sure you want to delete "${targetCourse?.name}" (${targetCourse?.code})?`}
+        academicWarning={
+          targetCourse?.studentCount && targetCourse.studentCount > 0
+            ? `There are currently ${targetCourse.studentCount} enrolled candidate(s) in this course. Permanent deletion is blocked to prevent breaking student profiles. Select Archive to safely deactivate this course.`
+            : 'If student candidates are enrolled in this program, select Archive to preserve candidate enrollment links.'
+        }
+        confirmText="Permanently Delete"
+        archiveText="Archive Course"
+        isArchiveOptionAvailable={true}
+        onConfirm={handleConfirmDelete}
+        onArchive={handleArchiveCourse}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setTargetCourse(null);
+          setDeleteError(null);
+        }}
+        isLoading={isDeleting}
+        error={deleteError}
+      />
     </div>
   );
 };

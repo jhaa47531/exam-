@@ -9,6 +9,8 @@ import type {
   StudentAnswer,
   ExamResult,
   NotificationItem,
+  FacultyMember,
+  Subject,
 } from '../types';
 
 const TOKEN_KEY = 'exampro_token';
@@ -150,8 +152,15 @@ export const api = {
   admin: {
     getDashboard: () =>
       request<any>('/api/admin/dashboard'),
+
+    // Students
     getStudents: () =>
       request<{ students: any[] }>('/api/admin/students'),
+    deleteStudent: (id: string, options?: { archive?: boolean }) =>
+      request<{ success: boolean; archived?: boolean; message?: string }>(
+        `/api/admin/students/${id}${options?.archive ? '?archive=true' : ''}`,
+        { method: 'DELETE' }
+      ),
     getVerifications: () =>
       request<{ verifications: StudentVerification[] }>('/api/admin/verifications'),
     approveVerification: (id: string) =>
@@ -163,6 +172,18 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ reason }),
       }),
+
+    // Faculty
+    getFaculty: () =>
+      request<{ faculty: FacultyMember[] }>('/api/admin/faculty'),
+    createFaculty: (data: Partial<FacultyMember>) =>
+      request<{ success: boolean; faculty: FacultyMember }>('/api/admin/faculty', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    deleteFaculty: (id: string) =>
+      request<{ success: boolean; message?: string }>(`/api/admin/faculty/${id}`, { method: 'DELETE' }),
+
     // Courses
     getCourses: () =>
       request<{ courses: Course[] }>('/api/admin/courses'),
@@ -176,8 +197,12 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
-    deleteCourse: (id: string) =>
-      request<{ success: boolean }>(`/api/admin/courses/${id}`, { method: 'DELETE' }),
+    deleteCourse: (id: string, options?: { archive?: boolean }) =>
+      request<{ success: boolean; archived?: boolean; message?: string }>(
+        `/api/admin/courses/${id}${options?.archive ? '?archive=true' : ''}`,
+        { method: 'DELETE' }
+      ),
+
     // Semesters
     getSemesters: (courseId?: string) =>
       request<{ semesters: Semester[] }>(`/api/admin/semesters${courseId ? `?course_id=${courseId}` : ''}`),
@@ -186,6 +211,26 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    deleteSemester: (id: string) =>
+      request<{ success: boolean; message?: string }>(`/api/admin/semesters/${id}`, { method: 'DELETE' }),
+
+    // Subjects
+    getSubjects: (params?: { course_id?: string; semester_id?: string }) =>
+      request<{ subjects: Subject[] }>(
+        `/api/admin/subjects?${params?.course_id ? `course_id=${params.course_id}&` : ''}${
+          params?.semester_id ? `semester_id=${params.semester_id}` : ''
+        }`
+      ),
+    createSubject: (data: Partial<Subject>) =>
+      request<{ success: boolean; subject: Subject }>('/api/admin/subjects', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    deleteSubject: (id: string, force?: boolean) =>
+      request<{ success: boolean; message?: string }>(`/api/admin/subjects/${id}${force ? '?force=true' : ''}`, {
+        method: 'DELETE',
+      }),
+
     // Exams
     getExams: () =>
       request<{ exams: Exam[] }>('/api/admin/exams'),
@@ -199,13 +244,17 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
-    deleteExam: (id: string) =>
-      request<{ success: boolean }>(`/api/admin/exams/${id}`, { method: 'DELETE' }),
+    deleteExam: (id: string, options?: { archive?: boolean }) =>
+      request<{ success: boolean; archived?: boolean; message?: string }>(
+        `/api/admin/exams/${id}${options?.archive ? '?archive=true' : ''}`,
+        { method: 'DELETE' }
+      ),
     assignExam: (id: string, payload: { student_ids: string[]; assignment_type?: string }) =>
       request<{ success: boolean; newlyAssignedCount: number }>(`/api/admin/exams/${id}/assign`, {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+
     // Questions
     getQuestions: (examId: string) =>
       request<{ questions: Question[] }>(`/api/admin/questions?exam_id=${examId}`),
@@ -215,7 +264,8 @@ export const api = {
         body: JSON.stringify(data),
       }),
     deleteQuestion: (id: string) =>
-      request<{ success: boolean }>(`/api/admin/questions/${id}`, { method: 'DELETE' }),
+      request<{ success: boolean; message?: string }>(`/api/admin/questions/${id}`, { method: 'DELETE' }),
+
     // Live Monitoring
     getMonitoring: () =>
       request<{ attempts: ExamAttempt[] }>('/api/admin/monitoring'),
@@ -238,6 +288,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ reason }),
       }),
+
     // Results
     getResults: () =>
       request<{ results: ExamResult[] }>('/api/admin/results'),
@@ -253,9 +304,18 @@ export const api = {
           body: JSON.stringify(payload),
         }
       ),
+
     // Activity Logs
     getActivityLogs: () =>
       request<{ logs: any[] }>('/api/admin/activity-logs'),
+    clearActivityLogs: () =>
+      request<{ success: boolean; message?: string }>('/api/admin/activity-logs', { method: 'DELETE' }),
+    deleteActivityLog: (id: string) =>
+      request<{ success: boolean; message?: string }>(`/api/admin/activity-logs/${id}`, { method: 'DELETE' }),
+
+    // Notifications
+    deleteNotification: (id: string) =>
+      request<{ success: boolean; message?: string }>(`/api/admin/notifications/${id}`, { method: 'DELETE' }),
   },
 
   // Upload
