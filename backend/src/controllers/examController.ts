@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { examService } from '../services/examService';
 import { monitoringService } from '../services/monitoringService';
-import { dataStore } from '../config/supabase';
+import * as db from '../services/db';
 import type { AuthenticatedRequest } from '../middleware/auth';
 
 export class ExamController {
@@ -12,7 +12,7 @@ export class ExamController {
     const userAgent = req.headers['user-agent'];
 
     try {
-      const data = examService.startOrResumeAttempt(id, studentId, ipAddress, userAgent);
+      const data = await examService.startOrResumeAttempt(id, studentId, ipAddress, userAgent);
       res.json(data);
     } catch (err: any) {
       res.status(400).json({ error: err.message || 'Could not start examination' });
@@ -23,32 +23,36 @@ export class ExamController {
     const { id } = req.params; // attempt_id
     const studentId = req.user!.id;
 
-    const attempt = dataStore.examAttempts.find((a) => a.id === id);
-    if (!attempt) {
-      res.status(404).json({ error: 'Attempt not found' });
-      return;
+    try {
+      const attempt = await db.getAttemptById(id);
+      if (!attempt) {
+        res.status(404).json({ error: 'Attempt not found in database' });
+        return;
+      }
+
+      if (attempt.student_id !== studentId && req.user!.role !== 'admin') {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+
+      const exam = await db.getExamById(attempt.exam_id);
+      const questions = await examService.getSanitizedQuestions(attempt.exam_id);
+      const answers = await db.getAnswersByAttempt(id);
+
+      // Calculate remaining seconds
+      const endMs = new Date(attempt.scheduled_end_time).getTime();
+      const remainingSeconds = Math.max(0, Math.floor((endMs - Date.now()) / 1000));
+
+      res.json({
+        attempt,
+        exam,
+        questions,
+        answers,
+        remainingSeconds,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to fetch exam attempt from database' });
     }
-
-    if (attempt.student_id !== studentId && req.user!.role !== 'admin') {
-      res.status(403).json({ error: 'Access denied' });
-      return;
-    }
-
-    const exam = dataStore.exams.find((e) => e.id === attempt.exam_id);
-    const questions = examService.getSanitizedQuestions(attempt.exam_id);
-    const answers = dataStore.answers.filter((a) => a.attempt_id === id);
-
-    // Calculate remaining seconds
-    const endMs = new Date(attempt.scheduled_end_time).getTime();
-    const remainingSeconds = Math.max(0, Math.floor((endMs - Date.now()) / 1000));
-
-    res.json({
-      attempt,
-      exam,
-      questions,
-      answers,
-      remainingSeconds,
-    });
   }
 
   async saveAnswers(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -62,10 +66,10 @@ export class ExamController {
     }
 
     try {
-      const result = examService.saveAnswers(id, studentId, answers);
+      const result = await examService.saveAnswers(id, studentId, answers);
       res.json(result);
     } catch (err: any) {
-      res.status(400).json({ error: err.message || 'Failed to save answers' });
+      res.status(400).json({ error: err.message || 'Failed to save answers to database' });
     }
   }
 
@@ -74,10 +78,10 @@ export class ExamController {
     const studentId = req.user!.id;
 
     try {
-      const result = examService.submitAttempt(id, studentId);
+      const result = await examService.submitAttempt(id, studentId);
       res.json(result);
     } catch (err: any) {
-      res.status(400).json({ error: err.message || 'Failed to submit exam' });
+      res.status(400).json({ error: err.message || 'Failed to submit exam to database' });
     }
   }
 
@@ -91,14 +95,17 @@ export class ExamController {
       return;
     }
 
-    const event = monitoringService.recordSecurityEvent(
-      id,
-      studentId,
-      event_type,
-      event_details
-    );
-
-    res.json({ success: true, event });
+    try {
+      const event = await monitoringService.recordSecurityEvent(
+        id,
+        studentId,
+        event_type,
+        event_details
+      );
+      res.json({ success: true, event });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to record security event in database' });
+    }
   }
 
   // SSE Stream for Real-time Attempt Updates (Holds, Warnings, Terminations)

@@ -1,31 +1,30 @@
-import { dataStore } from '../config/supabase';
+import * as db from './db';
 import { calculateExamScore, validateExamEntryWindow } from '../utils/grading';
 import type {
   Exam,
   ExamAttempt,
   Question,
-  QuestionOption,
   StudentAnswer,
   ExamResult,
-  NotificationItem,
 } from '../types';
 
 export class ExamService {
   /**
-   * Retrieves all exams available/assigned to a verified student.
+   * Retrieves all exams available/assigned to a verified student from PostgreSQL.
    */
-  getStudentExams(studentId: string) {
-    const enrollment = dataStore.studentEnrollments.find(
-      (e) => e.student_id === studentId
-    );
+  async getStudentExams(studentId: string) {
+    const [enrollment, assignments, exams, attempts, results] = await Promise.all([
+      db.getEnrollmentsByStudent(studentId),
+      db.getAssignmentsByStudent(studentId),
+      db.getAllExams(),
+      db.getAllAttempts({ student_id: studentId }),
+      db.getAllResults({ student_id: studentId }),
+    ]);
 
-    const assignments = dataStore.examAssignments.filter(
-      (a) => a.student_id === studentId
-    );
     const assignedExamIds = new Set(assignments.map((a) => a.exam_id));
 
-    const eligibleExams = dataStore.exams.filter((exam) => {
-      if (exam.status === 'draft') return false;
+    const eligibleExams = exams.filter((exam) => {
+      if (exam.status === 'draft' || exam.status === 'cancelled') return false;
       if (assignedExamIds.has(exam.id)) return true;
       if (
         enrollment &&
@@ -38,12 +37,8 @@ export class ExamService {
     });
 
     return eligibleExams.map((exam) => {
-      const attempt = dataStore.examAttempts.find(
-        (a) => a.exam_id === exam.id && a.student_id === studentId
-      );
-      const result = dataStore.results.find(
-        (r) => r.exam_id === exam.id && r.student_id === studentId
-      );
+      const attempt = attempts.find((a) => a.exam_id === exam.id);
+      const result = results.find((r) => r.exam_id === exam.id);
 
       return {
         ...exam,
@@ -63,27 +58,25 @@ export class ExamService {
   }
 
   /**
-   * Starts a new attempt or resumes an active attempt with server-authoritative timing.
+   * Starts a new attempt or resumes an active attempt with server-authoritative timing in PostgreSQL.
    */
-  startOrResumeAttempt(
+  async startOrResumeAttempt(
     examId: string,
     studentId: string,
-    ipAddress?: string,
-    userAgent?: string
+    _ipAddress?: string,
+    _userAgent?: string
   ) {
-    const exam = dataStore.exams.find((e) => e.id === examId);
+    const exam = await db.getExamById(examId);
     if (!exam) {
-      throw new Error('Exam not found');
+      throw new Error('Exam not found in database');
     }
 
     if (exam.status !== 'published') {
       throw new Error(`Exam is not currently published (Status: ${exam.status})`);
     }
 
-    // Check existing attempt
-    let attempt = dataStore.examAttempts.find(
-      (a) => a.exam_id === examId && a.student_id === studentId
-    );
+    // Check existing attempt in PostgreSQL
+    let attempt = await db.getAttemptByExamAndStudent(examId, studentId);
 
     if (attempt) {
       if (attempt.status === 'submitted') {
@@ -99,11 +92,14 @@ export class ExamService {
         return this.submitAttempt(attempt.id, studentId);
       }
 
+      const questions = await this.getSanitizedQuestions(examId);
+      const answers = await db.getAnswersByAttempt(attempt.id);
+
       return {
         attempt,
         exam,
-        questions: this.getSanitizedQuestions(examId),
-        answers: dataStore.answers.filter((a) => a.attempt_id === attempt!.id),
+        questions,
+        answers,
       };
     }
 
@@ -118,33 +114,24 @@ export class ExamService {
     }
 
     // Server calculates authoritative scheduled_end_time
-    // End time is min(now + duration, exam.end_time)
     const nowMs = Date.now();
     const durationEndMs = nowMs + exam.duration_minutes * 60 * 1000;
     const commonWindowEndMs = new Date(exam.end_time).getTime();
     const authoritativeEndMs = Math.min(durationEndMs, commonWindowEndMs);
 
-    attempt = {
-      id: `attempt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    attempt = await db.insertAttempt({
       exam_id: examId,
       student_id: studentId,
       start_time: new Date(nowMs).toISOString(),
       scheduled_end_time: new Date(authoritativeEndMs).toISOString(),
-      status: 'in_progress',
-      warning_count: 0,
-      tab_switch_count: 0,
-      fullscreen_exit_count: 0,
-      ip_address: ipAddress,
-      user_agent: userAgent,
-      created_at: new Date(nowMs).toISOString(),
-      updated_at: new Date(nowMs).toISOString(),
-    };
-    dataStore.examAttempts.push(attempt);
+    });
+
+    const questions = await this.getSanitizedQuestions(examId);
 
     return {
       attempt,
       exam,
-      questions: this.getSanitizedQuestions(examId),
+      questions,
       answers: [],
     };
   }
@@ -152,22 +139,17 @@ export class ExamService {
   /**
    * Sanitizes questions to ensure correct answers and option keys are never exposed to students.
    */
-  getSanitizedQuestions(examId: string) {
-    const rawQuestions = dataStore.questions
-      .filter((q) => q.exam_id === examId)
-      .sort((a, b) => a.order_index - b.order_index);
+  async getSanitizedQuestions(examId: string) {
+    const questions = await db.getQuestionsByExam(examId);
 
-    return rawQuestions.map((q) => {
-      const options = dataStore.questionOptions
-        .filter((opt) => opt.question_id === q.id)
-        .sort((a, b) => a.order_index - b.order_index)
-        .map((opt) => ({
-          id: opt.id,
-          question_id: opt.question_id,
-          option_text: opt.option_text,
-          order_index: opt.order_index,
-          // NOTE: is_correct is strictly omitted!
-        }));
+    return questions.map((q) => {
+      const sanitizedOptions = (q.options || []).map((opt) => ({
+        id: opt.id,
+        question_id: opt.question_id,
+        option_text: opt.option_text,
+        order_index: opt.order_index,
+        // is_correct strictly omitted
+      }));
 
       return {
         id: q.id,
@@ -177,15 +159,15 @@ export class ExamService {
         marks: q.marks,
         negative_marks: q.negative_marks,
         order_index: q.order_index,
-        options,
+        options: sanitizedOptions,
       };
     });
   }
 
   /**
-   * Saves or updates student answers in real-time.
+   * Saves or updates student answers in PostgreSQL in real-time.
    */
-  saveAnswers(
+  async saveAnswers(
     attemptId: string,
     studentId: string,
     answersList: Array<{
@@ -194,8 +176,8 @@ export class ExamService {
       written_answer?: string;
     }>
   ) {
-    const attempt = dataStore.examAttempts.find((a) => a.id === attemptId);
-    if (!attempt) throw new Error('Attempt not found');
+    const attempt = await db.getAttemptById(attemptId);
+    if (!attempt) throw new Error('Attempt not found in database');
     if (attempt.student_id !== studentId) throw new Error('Unauthorized attempt access');
     if (attempt.status === 'held') throw new Error('Exam is currently on proctor hold');
     if (attempt.status === 'terminated') throw new Error('Exam attempt has been terminated');
@@ -209,59 +191,42 @@ export class ExamService {
     }
 
     for (const item of answersList) {
-      let existing = dataStore.answers.find(
-        (a) => a.attempt_id === attemptId && a.question_id === item.question_id
-      );
-
-      if (existing) {
-        existing.selected_option_id = item.selected_option_id;
-        existing.written_answer = item.written_answer;
-        existing.updated_at = new Date().toISOString();
-      } else {
-        const newAns: StudentAnswer = {
-          id: `ans-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          attempt_id: attemptId,
-          question_id: item.question_id,
-          selected_option_id: item.selected_option_id,
-          written_answer: item.written_answer,
-          is_marked: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        dataStore.answers.push(newAns);
-      }
+      await db.upsertAnswer({
+        attempt_id: attemptId,
+        question_id: item.question_id,
+        selected_option_id: item.selected_option_id,
+        written_answer: item.written_answer,
+      });
     }
 
-    attempt.updated_at = new Date().toISOString();
     return { success: true, savedCount: answersList.length };
   }
 
   /**
-   * Submits exam attempt and computes automatic grading.
+   * Submits exam attempt and computes automatic grading in PostgreSQL.
    */
-  submitAttempt(attemptId: string, studentId: string) {
-    const attempt = dataStore.examAttempts.find((a) => a.id === attemptId);
-    if (!attempt) throw new Error('Attempt not found');
+  async submitAttempt(attemptId: string, studentId: string) {
+    const attempt = await db.getAttemptById(attemptId);
+    if (!attempt) throw new Error('Attempt not found in database');
     if (attempt.student_id !== studentId) throw new Error('Unauthorized');
     if (attempt.status === 'submitted') {
-      const existingResult = dataStore.results.find((r) => r.attempt_id === attemptId);
+      const existingResult = await db.getResultByAttempt(attemptId);
       return { success: true, attempt, result: existingResult };
     }
 
-    const exam = dataStore.exams.find((e) => e.id === attempt.exam_id);
-    if (!exam) throw new Error('Exam not found');
+    const exam = await db.getExamById(attempt.exam_id);
+    if (!exam) throw new Error('Exam not found in database');
 
     const submittedAt = new Date().toISOString();
-    attempt.status = 'submitted';
-    attempt.submitted_at = submittedAt;
-    attempt.updated_at = submittedAt;
+    const updatedAttempt = await db.updateAttempt(attemptId, {
+      status: 'submitted',
+      submitted_at: submittedAt,
+    });
 
-    // Load grading rules and correct options
-    const examQuestions = dataStore.questions.filter((q) => q.exam_id === exam.id);
+    // Load grading rules and correct options from PostgreSQL
+    const examQuestions = await db.getQuestionsByExam(exam.id);
     const rules = examQuestions.map((q) => {
-      const correctOpt = dataStore.questionOptions.find(
-        (o) => o.question_id === q.id && o.is_correct
-      );
+      const correctOpt = (q.options || []).find((o) => o.is_correct);
       return {
         id: q.id,
         type: q.question_type,
@@ -271,7 +236,7 @@ export class ExamService {
       };
     });
 
-    const studentAnswers = dataStore.answers.filter((a) => a.attempt_id === attemptId);
+    const studentAnswers = await db.getAnswersByAttempt(attemptId);
     const answersInput = studentAnswers.map((a) => ({
       questionId: a.question_id,
       selectedOptionId: a.selected_option_id,
@@ -287,63 +252,41 @@ export class ExamService {
       exam.negative_mark_value
     );
 
-    // Update marks_awarded on individual answer records
+    // Update marks_awarded on individual answer records in PostgreSQL
     for (const item of scoreSummary.items) {
-      const ans = studentAnswers.find((a) => a.question_id === item.questionId);
-      if (ans) {
-        ans.marks_awarded = item.marksAwarded;
-        ans.is_marked = !item.needsManualReview;
-      }
+      await db.upsertAnswer({
+        attempt_id: attemptId,
+        question_id: item.questionId,
+        marks_awarded: item.marksAwarded,
+      });
     }
 
     // Determine result publish status
     const shouldPublish =
       exam.result_release_setting === 'immediate' && !scoreSummary.hasPendingWrittenReview;
 
-    let result = dataStore.results.find((r) => r.attempt_id === attemptId);
-    if (result) {
-      result.total_marks = scoreSummary.totalMarks;
-      result.obtained_marks = scoreSummary.obtainedMarks;
-      result.percentage = scoreSummary.percentage;
-      result.is_passed = scoreSummary.isPassed;
-      result.status = shouldPublish ? 'published' : result.status;
-      if (shouldPublish && !result.published_at) {
-        result.published_at = submittedAt;
-      }
-    } else {
-      result = {
-        id: `res-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        attempt_id: attemptId,
-        exam_id: exam.id,
-        student_id: studentId,
-        total_marks: scoreSummary.totalMarks,
-        obtained_marks: scoreSummary.obtainedMarks,
-        percentage: scoreSummary.percentage,
-        is_passed: scoreSummary.isPassed,
-        status: shouldPublish ? 'published' : 'draft',
-        published_at: shouldPublish ? submittedAt : undefined,
-        generated_at: submittedAt,
-      };
-      dataStore.results.push(result);
-    }
+    const result = await db.upsertResult({
+      attempt_id: attemptId,
+      exam_id: exam.id,
+      student_id: studentId,
+      total_marks: scoreSummary.totalMarks,
+      obtained_marks: scoreSummary.obtainedMarks,
+      percentage: scoreSummary.percentage,
+      is_passed: scoreSummary.isPassed,
+      is_published: shouldPublish,
+    });
 
     if (shouldPublish) {
-      const notif: NotificationItem = {
-        id: `notif-${Date.now()}`,
+      await db.insertNotification({
         user_id: studentId,
         title: 'Exam Result Published',
         message: `Your score for ${exam.title}: ${scoreSummary.obtainedMarks}/${scoreSummary.totalMarks} (${scoreSummary.percentage}% - ${scoreSummary.isPassed ? 'PASSED' : 'NEEDS IMPROVEMENT'}).`,
-        type: scoreSummary.isPassed ? 'success' : 'info',
-        is_read: false,
-        metadata: { examId: exam.id, resultId: result.id },
-        created_at: submittedAt,
-      };
-      dataStore.notifications.push(notif);
+      });
     }
 
     return {
       success: true,
-      attempt,
+      attempt: updatedAttempt,
       result: shouldPublish ? result : null,
       scoreSummary: shouldPublish ? scoreSummary : null,
     };

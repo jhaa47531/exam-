@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type {
   UserProfile,
@@ -227,9 +229,10 @@ export class ExamProDataStore {
   subjects: Subject[] = [];
   faculty: FacultyMember[] = [];
   credentials: Map<string, string> = new Map();
+  studentCollegeIdMap: Map<string, string> = new Map();
 
   constructor() {
-    this.initSeedData();
+    // Empty by default - no fake or seed demo records
   }
 
   initSeedData() {

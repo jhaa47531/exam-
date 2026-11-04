@@ -151,6 +151,7 @@ export interface Question {
   order_index: number;
   explanation?: string;
   created_at: string;
+  options?: QuestionOption[];
 }
 
 export interface QuestionOption {

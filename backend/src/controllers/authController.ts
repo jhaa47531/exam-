@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { supabase, isRealSupabaseConfigured, dataStore, testDatabaseConnection } from '../config/supabase';
+import * as db from '../services/db';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import type { UserProfile } from '../types';
 
@@ -22,43 +23,39 @@ export class AuthController {
     const envAdminPassword = process.env.ADMIN_PASSWORD || 'Admin@1234';
 
     try {
-      // 1. Try real Supabase if configured
+      // 1. Try real Supabase Auth if configured
       if (isRealSupabaseConfigured && supabase) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanIdentifier,
-          password,
-        });
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: cleanIdentifier,
+            password,
+          });
 
-        if (!error && data.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .single();
+          if (!error && data.user) {
+            const profile = await db.findProfileById(data.user.id);
 
-          if (profile && profile.role !== 'admin') {
-            res.status(403).json({
-              error: 'Access denied: This portal is strictly for administrator accounts. Student credentials cannot be used here.',
-              code: 'ADMIN_ACCESS_REQUIRED',
+            if (profile && profile.role !== 'admin') {
+              res.status(403).json({
+                error: 'Access denied: This portal is strictly for administrator accounts. Student credentials cannot be used here.',
+                code: 'ADMIN_ACCESS_REQUIRED',
+              });
+              return;
+            }
+
+            res.json({
+              user: profile || { id: data.user.id, email: data.user.email, role: 'admin' },
+              token: data.session?.access_token,
             });
             return;
           }
-
-          res.json({
-            user: profile || { id: data.user.id, email: data.user.email, role: 'admin' },
-            token: data.session?.access_token,
-          });
-          return;
+        } catch {
+          // If auth signInWithPassword fails, continue to database profile check
         }
       }
 
       // 2. Reject if registered student credentials are used in Admin login
-      const studentProfile = dataStore.profiles.find(
-        (p) =>
-          String(p.role).toLowerCase() === 'student' &&
-          (p.email.toLowerCase() === cleanIdentifier || p.id === cleanIdentifier)
-      );
-      if (studentProfile) {
+      const studentProfile = await db.findProfileByEmail(cleanIdentifier);
+      if (studentProfile && studentProfile.role === 'student') {
         const storedStudentPass =
           dataStore.credentials.get(studentProfile.email.toLowerCase()) ||
           dataStore.credentials.get(studentProfile.id.toLowerCase());
@@ -71,26 +68,30 @@ export class AuthController {
         }
       }
 
-      // 3. System Administrator Authentication
+      // 3. System Administrator Authentication via PostgreSQL Profiles
       const isAdminIdentifier =
         cleanIdentifier === 'admin@exampro.edu' ||
         cleanIdentifier === 'admin' ||
         cleanIdentifier === envAdminEmail ||
-        cleanIdentifier === 'admin-system-01' ||
-        cleanIdentifier === 'admin-system-02';
+        cleanIdentifier === 'jhaa47531@gmail.com';
 
       const isDefaultPassValid =
         password === 'Admin@1234' ||
         password === envAdminPassword;
 
-      // Find an existing admin profile
-      let adminProfile = dataStore.profiles.find(
-        (p) =>
-          String(p.role).toLowerCase() === 'admin' &&
-          (p.email.toLowerCase() === cleanIdentifier ||
-           p.id === cleanIdentifier ||
-           (isAdminIdentifier && (p.email.toLowerCase() === envAdminEmail || p.email.toLowerCase() === 'admin@exampro.edu' || p.id === 'admin-system-01' || p.id === 'admin-system-02')))
-      );
+      // Find an existing admin profile in PostgreSQL
+      let adminProfile: UserProfile | null = null;
+      try {
+        const adminProfiles = await db.getAllProfiles('admin');
+        adminProfile = adminProfiles.find(
+          (p) =>
+            p.email.toLowerCase() === cleanIdentifier ||
+            (isAdminIdentifier && (p.email.toLowerCase() === envAdminEmail || p.email.toLowerCase() === 'admin@exampro.edu' || p.email.toLowerCase() === 'jhaa47531@gmail.com'))
+        ) || null;
+      } catch {
+        // Fallback to checking by single email
+        adminProfile = await db.findProfileByEmail(cleanIdentifier);
+      }
 
       // Check stored password or matching admin password
       const storedPassword =
@@ -114,19 +115,16 @@ export class AuthController {
       }
 
       if (!adminProfile) {
-        adminProfile = {
-          id: 'admin-system-01',
+        // If not in database yet, create admin profile in PostgreSQL
+        adminProfile = await db.insertProfile({
+          id: `admin-${Date.now()}`,
           email: cleanIdentifier.includes('@') ? cleanIdentifier : (envAdminEmail || 'admin@exampro.edu'),
           full_name: 'Chief Examination Controller',
           role: 'admin',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        dataStore.profiles.push(adminProfile);
+        });
       }
 
-      // Ensure credentials and role are normalized
-      adminProfile.role = 'admin';
+      // Normalize in-memory credentials for token lookups
       dataStore.credentials.set(adminProfile.email.toLowerCase(), password);
       dataStore.credentials.set('admin@exampro.edu', password);
       dataStore.credentials.set('admin', password);
@@ -163,7 +161,8 @@ export class AuthController {
     const isAdminIdentifier =
       cleanIdentifier === envAdminEmail ||
       cleanIdentifier === 'admin' ||
-      cleanIdentifier === 'admin@exampro.edu';
+      cleanIdentifier === 'admin@exampro.edu' ||
+      cleanIdentifier === 'jhaa47531@gmail.com';
 
     const isAdminPassword =
       password === envAdminPassword ||
@@ -177,98 +176,92 @@ export class AuthController {
       return;
     }
 
-    const adminCheck = dataStore.profiles.find(
-      (p) =>
-        String(p.role).toLowerCase() === 'admin' &&
-        (p.email.toLowerCase() === cleanIdentifier || p.id === cleanIdentifier)
-    );
-    if (adminCheck) {
-      const storedAdminPass =
-        dataStore.credentials.get(adminCheck.email.toLowerCase()) ||
-        dataStore.credentials.get(cleanIdentifier) ||
-        envAdminPassword ||
-        'Admin@1234';
-      if (storedAdminPass === password) {
-        res.status(403).json({
-          error: 'Access denied: Administrator accounts must use the dedicated Admin Portal.',
-          code: 'STUDENT_ACCESS_REQUIRED',
-        });
-        return;
-      }
-    }
-
     try {
-      // 2. Try real Supabase if configured
-      if (isRealSupabaseConfigured && supabase) {
-        let studentEmail = cleanIdentifier;
-
-        if (!cleanIdentifier.includes('@')) {
-          const { data: enrollment } = await supabase
-            .from('student_enrollments')
-            .select('student_id')
-            .or(`college_student_id.eq.${cleanIdentifier},enrollment_number.eq.${cleanIdentifier}`)
-            .maybeSingle();
-
-          if (enrollment) {
-            const { data: prof } = await supabase
-              .from('profiles')
-              .select('email')
-              .eq('id', enrollment.student_id)
-              .maybeSingle();
-            if (prof?.email) {
-              studentEmail = prof.email.toLowerCase();
-            }
-          }
-        }
-
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: studentEmail,
-          password,
-        });
-
-        if (!error && data.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .single();
-
-          if (profile && profile.role !== 'student') {
-            res.status(403).json({
-              error: 'Access denied: Administrator accounts must use the dedicated Admin Portal.',
-              code: 'STUDENT_ACCESS_REQUIRED',
-            });
-            return;
-          }
-
-          const [{ data: verification }, { data: enrollment }] = await Promise.all([
-            supabase.from('student_verifications').select('*').eq('student_id', data.user.id).maybeSingle(),
-            supabase.from('student_enrollments').select('*').eq('student_id', data.user.id).maybeSingle(),
-          ]);
-
-          res.json({
-            user: profile || { id: data.user.id, email: data.user.email, role: 'student' },
-            token: data.session?.access_token,
-            verification,
-            enrollment,
+      const adminCheck = await db.findProfileByEmail(cleanIdentifier);
+      if (adminCheck && adminCheck.role === 'admin') {
+        const storedAdminPass =
+          dataStore.credentials.get(adminCheck.email.toLowerCase()) ||
+          dataStore.credentials.get(cleanIdentifier) ||
+          envAdminPassword ||
+          'Admin@1234';
+        if (storedAdminPass === password) {
+          res.status(403).json({
+            error: 'Access denied: Administrator accounts must use the dedicated Admin Portal.',
+            code: 'STUDENT_ACCESS_REQUIRED',
           });
           return;
         }
       }
 
-      // 3. Search in-store registered students
-      let studentProfile: UserProfile | undefined = dataStore.profiles.find(
-        (p) => p.email.toLowerCase() === cleanIdentifier && p.role === 'student'
-      );
+      // 2. Try real Supabase Auth if configured
+      if (isRealSupabaseConfigured && supabase) {
+        let studentEmail = cleanIdentifier;
+
+        if (!cleanIdentifier.includes('@')) {
+          const enrollments = await db.getAllEnrollments();
+          const match = enrollments.find(
+            (e) =>
+              e.college_student_id.toLowerCase() === cleanIdentifier ||
+              e.enrollment_number.toLowerCase() === cleanIdentifier
+          );
+          if (match) {
+            const prof = await db.findProfileById(match.student_id);
+            if (prof?.email) studentEmail = prof.email.toLowerCase();
+          }
+        }
+
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: studentEmail,
+            password,
+          });
+
+          if (!error && data.user) {
+            const profile = await db.findProfileById(data.user.id);
+
+            if (profile && profile.role !== 'student') {
+              res.status(403).json({
+                error: 'Access denied: Administrator accounts must use the dedicated Admin Portal.',
+                code: 'STUDENT_ACCESS_REQUIRED',
+              });
+              return;
+            }
+
+            const [verification, enrollment] = await Promise.all([
+              db.getVerificationByStudent(data.user.id),
+              db.getEnrollmentsByStudent(data.user.id),
+            ]);
+
+            res.json({
+              user: profile || { id: data.user.id, email: data.user.email, role: 'student' },
+              token: data.session?.access_token,
+              verification,
+              enrollment,
+            });
+            return;
+          }
+        } catch {
+          // If Supabase Auth fails, fall through to profile lookup
+        }
+      }
+
+      // 3. Search in PostgreSQL database
+      let studentProfile: UserProfile | null = await db.findProfileByEmail(cleanIdentifier);
 
       if (!studentProfile) {
-        const enrollment = dataStore.studentEnrollments.find(
+        const enrollments = await db.getAllEnrollments();
+        const enrollment = enrollments.find(
           (e) =>
             e.college_student_id.toLowerCase() === cleanIdentifier ||
             e.enrollment_number.toLowerCase() === cleanIdentifier
         );
         if (enrollment) {
-          studentProfile = dataStore.profiles.find((p) => p.id === enrollment.student_id);
+          studentProfile = await db.findProfileById(enrollment.student_id);
+        } else {
+          const studentIdFromMap = dataStore.studentCollegeIdMap.get(cleanIdentifier);
+          if (studentIdFromMap) {
+            studentProfile = await db.findProfileById(studentIdFromMap);
+          }
         }
       }
 
@@ -291,8 +284,10 @@ export class AuthController {
         return;
       }
 
-      const verification = dataStore.studentVerifications.find((v) => v.student_id === studentProfile!.id) || null;
-      const enrollment = dataStore.studentEnrollments.find((e) => e.student_id === studentProfile!.id) || null;
+      const [verification, enrollment] = await Promise.all([
+        db.getVerificationByStudent(studentProfile.id),
+        db.getEnrollmentsByStudent(studentProfile.id),
+      ]);
 
       res.json({
         user: studentProfile,
@@ -341,28 +336,30 @@ export class AuthController {
       return;
     }
 
-    let verification = null;
-    let enrollment = null;
+    try {
+      let verification = null;
+      let enrollment = null;
 
-    if (req.user.role === 'student') {
-      if (isRealSupabaseConfigured && supabase) {
-        const [{ data: v }, { data: e }] = await Promise.all([
-          supabase.from('student_verifications').select('*').eq('student_id', req.user.id).maybeSingle(),
-          supabase.from('student_enrollments').select('*').eq('student_id', req.user.id).maybeSingle(),
+      if (req.user.role === 'student') {
+        const [v, e] = await Promise.all([
+          db.getVerificationByStudent(req.user.id),
+          db.getEnrollmentsByStudent(req.user.id),
         ]);
         verification = v;
         enrollment = e;
-      } else {
-        verification = dataStore.studentVerifications.find((v) => v.student_id === req.user!.id) || null;
-        enrollment = dataStore.studentEnrollments.find((e) => e.student_id === req.user!.id) || null;
       }
-    }
 
-    res.json({
-      user: req.user,
-      verification,
-      enrollment,
-    });
+      // Re-fetch latest profile from database to ensure fresh data
+      const latestProfile = await db.findProfileById(req.user.id);
+
+      res.json({
+        user: latestProfile || req.user,
+        verification,
+        enrollment,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to fetch current user session' });
+    }
   }
 
   async getDbStatus(_req: Request, res: Response): Promise<void> {
