@@ -20,8 +20,10 @@ import {
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { DeleteConfirmModal } from '../../components/common/DeleteConfirmModal';
+import { useDatabaseConnection } from '../../context/DatabaseConnectionContext';
 
 export const ExamManagement: React.FC = () => {
+  const { isOperationsDisabled } = useDatabaseConnection();
   const [exams, setExams] = useState<Exam[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [semesters, setSemesters] = useState<Semester[]>([]);
@@ -192,7 +194,9 @@ export const ExamManagement: React.FC = () => {
 
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-xs shadow-md shadow-blue-500/20 transition cursor-pointer"
+          disabled={isOperationsDisabled}
+          title={isOperationsDisabled ? 'Disabled: Database unavailable' : undefined}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-xs shadow-md shadow-blue-500/20 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Create New Exam</span>
@@ -558,8 +562,9 @@ export const ExamManagement: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
-                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-sm transition cursor-pointer"
+                    disabled={isSubmitting || isOperationsDisabled}
+                    title={isOperationsDisabled ? 'Disabled: Database unavailable' : undefined}
+                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-sm transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? 'Saving...' : 'Create Scheduled Exam'}
                   </button>

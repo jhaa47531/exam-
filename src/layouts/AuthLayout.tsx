@@ -3,6 +3,7 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { ShieldCheck, GraduationCap, Lock, Award } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'motion/react';
+import { DatabaseStatusBanner } from '../components/common/DatabaseStatusBanner';
 
 export const AuthLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -12,6 +13,7 @@ export const AuthLayout: React.FC = () => {
   }
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white relative">
+      <DatabaseStatusBanner />
 
       {/* Ambient background glows */}
       <div className="absolute top-12 left-1/4 w-96 h-96 bg-blue-100/60 rounded-full blur-3xl pointer-events-none -z-10" />

@@ -6,7 +6,7 @@ import { dataStore, testDatabaseConnection } from '../config/supabase';
 test('Database Connection Check: correctly reports disconnected when Supabase URL is not set', async () => {
   const result = await testDatabaseConnection();
   assert.equal(result.connected, false);
-  assert.match(result.message, /Database is disconnected/i);
+  assert.match(result.message, /Database is disconnected|unable to connect to the database/i);
 });
 
 test('Auth System: Admin login strictly permits admin role and rejects invalid credentials', async () => {

@@ -12,8 +12,10 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DeleteConfirmModal } from '../../components/common/DeleteConfirmModal';
+import { useDatabaseConnection } from '../../context/DatabaseConnectionContext';
 
 export const StudentManagement: React.FC = () => {
+  const { isOperationsDisabled } = useDatabaseConnection();
   const [students, setStudents] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -264,8 +266,9 @@ export const StudentManagement: React.FC = () => {
                       <td className="py-3.5 px-4 text-right">
                         <button
                           onClick={() => openDeleteModal(student)}
-                          title="Delete or Archive Student"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition cursor-pointer"
+                          disabled={isOperationsDisabled}
+                          title={isOperationsDisabled ? 'Disabled: Database unavailable' : 'Delete or Archive Student'}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

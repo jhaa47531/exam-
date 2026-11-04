@@ -21,6 +21,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { DatabaseStatusBanner } from '../components/common/DatabaseStatusBanner';
+import { DatabaseStatusIndicator } from '../components/common/DatabaseStatusIndicator';
 
 export const StudentLayout: React.FC = () => {
   const { user, verification, logout, refreshProfile } = useAuth();
@@ -90,15 +92,7 @@ export const StudentLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans">
-      {dbStatus && !dbStatus.connected && (
-        <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-semibold flex items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-slate-950 animate-pulse" />
-            <span>Database Connection: {dbStatus.message}</span>
-          </div>
-          <span className="text-[11px] font-mono bg-amber-600/30 px-2 py-0.5 rounded">Standalone Mode</span>
-        </div>
-      )}
+      <DatabaseStatusBanner />
 
       {/* Verification Status Warning Ribbon if Pending or Rejected */}
       {verification && verification.status === 'pending' && (
@@ -269,6 +263,9 @@ export const StudentLayout: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Global Database Status Indicator */}
+              <DatabaseStatusIndicator />
+
               <NavLink
                 to="/student/notifications"
                 className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition relative"

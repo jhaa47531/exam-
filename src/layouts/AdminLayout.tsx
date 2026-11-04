@@ -27,6 +27,8 @@ import {
   BookMarked,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { DatabaseStatusBanner } from '../components/common/DatabaseStatusBanner';
+import { DatabaseStatusIndicator } from '../components/common/DatabaseStatusIndicator';
 
 export const AdminLayout: React.FC = () => {
   const { user, logout } = useAuth();
@@ -90,15 +92,7 @@ export const AdminLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans">
-      {dbStatus && !dbStatus.connected && (
-        <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-semibold flex items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-slate-950 animate-pulse" />
-            <span>Database Connection: {dbStatus.message}</span>
-          </div>
-          <span className="text-[11px] font-mono bg-amber-600/30 px-2 py-0.5 rounded">Standalone Mode</span>
-        </div>
-      )}
+      <DatabaseStatusBanner />
 
       <div className="flex-1 flex overflow-hidden">
         {/* Desktop Sidebar */}
@@ -210,11 +204,8 @@ export const AdminLayout: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Quick status pill */}
-              <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-xs text-slate-600">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                <span className="font-medium">System Online</span>
-              </div>
+              {/* Global Database Status Indicator */}
+              <DatabaseStatusIndicator showLatency={true} />
 
               {/* Notification icon */}
               <div className="relative">

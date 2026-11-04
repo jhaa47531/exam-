@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertTriangle, Trash2, Archive, X, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, Trash2, Archive, X, ShieldAlert, WifiOff } from 'lucide-react';
+import { useDatabaseConnection } from '../../context/DatabaseConnectionContext';
 
 export interface DeleteConfirmModalProps {
   isOpen: boolean;
@@ -31,6 +32,8 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   error = null,
   academicWarning = null,
 }) => {
+  const { isOperationsDisabled } = useDatabaseConnection();
+
   if (!isOpen) return null;
 
   return (
@@ -78,6 +81,20 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
               </div>
             )}
 
+            {isOperationsDisabled && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-start gap-2.5">
+                <WifiOff className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-bold block text-[11px] uppercase tracking-wide text-rose-800">
+                    Database Connection Offline
+                  </span>
+                  <p className="text-[11px] leading-relaxed text-rose-700">
+                    Delete and archive operations are disabled while the database is unavailable. Please retry connection before proceeding.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-start gap-2.5">
                 <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -106,8 +123,9 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
               <button
                 type="button"
                 onClick={onArchive}
-                disabled={isLoading}
-                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+                disabled={isLoading || isOperationsDisabled}
+                title={isOperationsDisabled ? 'Disabled: Database unavailable' : undefined}
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Archive className="w-4 h-4" />
                 <span>{isLoading ? 'Processing...' : archiveText}</span>
@@ -117,8 +135,9 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             <button
               type="button"
               onClick={onConfirm}
-              disabled={isLoading}
-              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-md shadow-rose-600/20 cursor-pointer disabled:opacity-50"
+              disabled={isLoading || isOperationsDisabled}
+              title={isOperationsDisabled ? 'Disabled: Database unavailable' : undefined}
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-md shadow-rose-600/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Trash2 className="w-4 h-4" />
               <span>{isLoading ? 'Deleting...' : confirmText}</span>

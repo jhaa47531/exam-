@@ -15,6 +15,16 @@ import type {
 
 const TOKEN_KEY = 'exampro_token';
 
+export interface DatabaseHealthStatus {
+  connected: boolean;
+  status: 'connected' | 'disconnected';
+  message: string;
+  timestamp: string;
+  latencyMs?: number;
+  error?: string;
+  code?: string;
+}
+
 export const tokenStorage = {
   get: () => localStorage.getItem(TOKEN_KEY),
   set: (token: string) => localStorage.setItem(TOKEN_KEY, token),
@@ -32,29 +42,56 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(path, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(path, {
+      ...options,
+      headers,
+    });
 
-  const contentType = response.headers.get('content-type');
-  let data: any = null;
-  if (contentType && contentType.includes('application/json')) {
-    data = await response.json();
-  } else {
-    data = await response.text();
-  }
+    const contentType = response.headers.get('content-type');
+    let data: any = null;
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      data = await response.text();
+    }
 
-  if (!response.ok) {
-    const errorMsg = data?.error || data?.message || `Request failed with status ${response.status}`;
-    const err = new Error(errorMsg) as any;
-    err.status = response.status;
-    err.code = data?.code;
-    err.data = data;
+    if (!response.ok) {
+      // Notify connection monitor on database service unavailability
+      // Critical: 401 / 403 are authorization errors and must NEVER trigger database failure
+      if (
+        response.status === 503 ||
+        data?.code === 'DATABASE_UNAVAILABLE' ||
+        (typeof data?.error === 'string' && data.error.toLowerCase().includes('unable to connect to the database'))
+      ) {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('exampro:database-error', {
+              detail: { status: response.status, data },
+            })
+          );
+        }
+      }
+
+      const errorMsg = data?.error || data?.message || `Request failed with status ${response.status}`;
+      const err = new Error(errorMsg) as any;
+      err.status = response.status;
+      err.code = data?.code;
+      err.data = data;
+      throw err;
+    }
+
+    return data as T;
+  } catch (err: any) {
+    if (err.name === 'TypeError' && err.message?.includes('fetch') && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('exampro:database-error', {
+          detail: { error: err.message },
+        })
+      );
+    }
     throw err;
   }
-
-  return data as T;
 }
 
 export const api = {
@@ -324,6 +361,39 @@ export const api = {
       request<{ success: boolean; url: string; path: string }>('/api/upload/id-card', {
         method: 'POST',
         body: JSON.stringify({ image_base64, filename }),
+      }),
+  },
+
+  // Database Connection Health Check
+  health: {
+    getDatabaseStatus: async (simulateDisconnect?: boolean): Promise<DatabaseHealthStatus> => {
+      try {
+        const path = `/api/health/database${simulateDisconnect ? '?simulate_disconnect=true' : ''}`;
+        const res = await fetch(path);
+        const data = await res.json();
+        return {
+          connected: Boolean(data.connected),
+          status: data.connected ? 'connected' : 'disconnected',
+          message: data.message || (data.connected ? 'Database connected successfully' : 'We are unable to connect to the database. Please try again later.'),
+          timestamp: data.timestamp || new Date().toISOString(),
+          latencyMs: data.latencyMs,
+          error: data.error,
+          code: data.code,
+        };
+      } catch (err: any) {
+        return {
+          connected: false,
+          status: 'disconnected',
+          message: 'We are unable to connect to the database. Please try again later.',
+          error: 'Network unreachable or database service unavailable',
+          timestamp: new Date().toISOString(),
+        };
+      }
+    },
+    simulateOutage: (disconnect: boolean) =>
+      request<{ success: boolean; simulatedOutage: boolean }>('/api/health/database/simulate', {
+        method: 'POST',
+        body: JSON.stringify({ disconnect }),
       }),
   },
 };

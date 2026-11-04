@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { DatabaseConnectionProvider } from './context/DatabaseConnectionContext';
 
 // Layouts
 import { AuthLayout } from './layouts/AuthLayout';
@@ -72,83 +73,85 @@ const StudentRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Root Redirect */}
-          <Route path="/" element={<RootRedirect />} />
+    <DatabaseConnectionProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Root Redirect */}
+            <Route path="/" element={<RootRedirect />} />
 
-          {/* Authentication Routes */}
-          <Route path="/auth" element={<AuthLayout />}>
-            <Route index element={<PortalSelect />} />
-            <Route path="admin-login" element={<AdminLogin />} />
-            <Route path="student-login" element={<StudentLogin />} />
-            <Route path="login" element={<Navigate to="/auth" replace />} />
-            <Route path="register" element={<Register />} />
-            <Route path="forgot-password" element={<ForgotPassword />} />
-          </Route>
+            {/* Authentication Routes */}
+            <Route path="/auth" element={<AuthLayout />}>
+              <Route index element={<PortalSelect />} />
+              <Route path="admin-login" element={<AdminLogin />} />
+              <Route path="student-login" element={<StudentLogin />} />
+              <Route path="login" element={<Navigate to="/auth" replace />} />
+              <Route path="register" element={<Register />} />
+              <Route path="forgot-password" element={<ForgotPassword />} />
+            </Route>
 
-          {/* Dedicated Fullscreen Proctored Exam Station */}
-          <Route
-            path="/student/exam/:id"
-            element={
-              <StudentRoute>
-                <ExamInterface />
-              </StudentRoute>
-            }
-          />
+            {/* Dedicated Fullscreen Proctored Exam Station */}
+            <Route
+              path="/student/exam/:id"
+              element={
+                <StudentRoute>
+                  <ExamInterface />
+                </StudentRoute>
+              }
+            />
 
-          {/* Student Portal Routes */}
-          <Route
-            path="/student"
-            element={
-              <StudentRoute>
-                <StudentLayout />
-              </StudentRoute>
-            }
-          >
-            <Route index element={<Navigate to="/student/dashboard" replace />} />
-            <Route path="dashboard" element={<StudentDashboard />} />
-            <Route path="available-exams" element={<AvailableExams />} />
-            <Route path="upcoming-exams" element={<AvailableExams />} />
-            <Route path="history" element={<StudentDashboard />} />
-            <Route path="results" element={<StudentDashboard />} />
-            <Route path="results/:examId" element={<ExamResultView />} />
-            <Route path="profile" element={<StudentProfile />} />
-            <Route path="notifications" element={<StudentNotifications />} />
-          </Route>
+            {/* Student Portal Routes */}
+            <Route
+              path="/student"
+              element={
+                <StudentRoute>
+                  <StudentLayout />
+                </StudentRoute>
+              }
+            >
+              <Route index element={<Navigate to="/student/dashboard" replace />} />
+              <Route path="dashboard" element={<StudentDashboard />} />
+              <Route path="available-exams" element={<AvailableExams />} />
+              <Route path="upcoming-exams" element={<AvailableExams />} />
+              <Route path="history" element={<StudentDashboard />} />
+              <Route path="results" element={<StudentDashboard />} />
+              <Route path="results/:examId" element={<ExamResultView />} />
+              <Route path="profile" element={<StudentProfile />} />
+              <Route path="notifications" element={<StudentNotifications />} />
+            </Route>
 
-          {/* Admin Station Routes */}
-          <Route
-            path="/admin"
-            element={
-              <AdminRoute>
-                <AdminLayout />
-              </AdminRoute>
-            }
-          >
-            <Route index element={<Navigate to="/admin/dashboard" replace />} />
-            <Route path="dashboard" element={<AdminDashboard />} />
-            <Route path="verifications" element={<StudentVerification />} />
-            <Route path="students" element={<StudentManagement />} />
-            <Route path="faculty" element={<FacultyManagement />} />
-            <Route path="courses" element={<CourseManagement />} />
-            <Route path="semesters" element={<SemesterManagement />} />
-            <Route path="subjects" element={<SubjectManagement />} />
-            <Route path="exams" element={<ExamManagement />} />
-            <Route path="questions" element={<QuestionManagement />} />
-            <Route path="assignments" element={<ExamAssignments />} />
-            <Route path="monitoring" element={<LiveMonitoring />} />
-            <Route path="results" element={<ResultsManagement />} />
-            <Route path="reports" element={<ReportsAnalytics />} />
-            <Route path="activity-logs" element={<ActivityLogs />} />
-            <Route path="settings" element={<AdminSettings />} />
-          </Route>
+            {/* Admin Station Routes */}
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <AdminLayout />
+                </AdminRoute>
+              }
+            >
+              <Route index element={<Navigate to="/admin/dashboard" replace />} />
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="verifications" element={<StudentVerification />} />
+              <Route path="students" element={<StudentManagement />} />
+              <Route path="faculty" element={<FacultyManagement />} />
+              <Route path="courses" element={<CourseManagement />} />
+              <Route path="semesters" element={<SemesterManagement />} />
+              <Route path="subjects" element={<SubjectManagement />} />
+              <Route path="exams" element={<ExamManagement />} />
+              <Route path="questions" element={<QuestionManagement />} />
+              <Route path="assignments" element={<ExamAssignments />} />
+              <Route path="monitoring" element={<LiveMonitoring />} />
+              <Route path="results" element={<ResultsManagement />} />
+              <Route path="reports" element={<ReportsAnalytics />} />
+              <Route path="activity-logs" element={<ActivityLogs />} />
+              <Route path="settings" element={<AdminSettings />} />
+            </Route>
 
-          {/* Catch-all */}
-          <Route path="*" element={<RootRedirect />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+            {/* Catch-all */}
+            <Route path="*" element={<RootRedirect />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </DatabaseConnectionProvider>
   );
 }

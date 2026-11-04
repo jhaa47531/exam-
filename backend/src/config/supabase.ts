@@ -62,86 +62,141 @@ export const supabase: SupabaseClient | null = isRealSupabaseConfigured
         : null))
   : null;
 
-/**
- * Tests the real database connection against Supabase.
- * Uses service_role client for administrative table validation when configured.
- * When running with client anon credentials, tests against public catalog tables (courses)
- * because private student profiles require authentication under Row Level Security.
- */
-export async function testDatabaseConnection(): Promise<{
+// Simulation state for health and failure testing
+let simulatedDatabaseOutage = false;
+
+export function setSimulatedDatabaseOutage(isOutage: boolean): void {
+  simulatedDatabaseOutage = isOutage;
+}
+
+export function isSimulatedDatabaseOutage(): boolean {
+  return simulatedDatabaseOutage;
+}
+
+export interface DatabaseConnectionHealthResult {
   connected: boolean;
+  status: 'connected' | 'disconnected';
   message: string;
   timestamp: string;
+  latencyMs?: number;
   code?: string;
-  hint?: string;
-}> {
+  error?: string;
+}
+
+/**
+ * Tests the real database connection against Supabase using a lightweight query.
+ * Measures round-trip query latency and returns a safe status report.
+ * Strictly avoids exposing database credentials, URLs, connection strings or internal stack traces.
+ */
+export async function testDatabaseConnection(): Promise<DatabaseConnectionHealthResult> {
   const timestamp = new Date().toISOString();
+  const startTime = Date.now();
+
+  // Test simulation hook
+  if (simulatedDatabaseOutage) {
+    return {
+      connected: false,
+      status: 'disconnected',
+      message: 'We are unable to connect to the database. Please try again later.',
+      error: 'We are unable to connect to the database. Please try again later.',
+      code: 'DATABASE_SIMULATED_DISCONNECT',
+      timestamp,
+      latencyMs: 0,
+    };
+  }
 
   if (!isRealSupabaseConfigured || (!supabase && !supabaseAdmin)) {
     return {
       connected: false,
-      message: 'Database is disconnected. In-memory data store is active.',
+      status: 'disconnected',
+      message: 'We are unable to connect to the database. Please try again later.',
+      error: 'Database is disconnected. In-memory data store is active.',
       timestamp,
+      latencyMs: 0,
     };
   }
 
   try {
-    // 1. If backend has service_role privileges, test directly against profiles table
+    // 1. If backend has service_role privileges, execute a lightweight check against profiles table
     if (supabaseAdmin) {
       const { error } = await supabaseAdmin.from('profiles').select('id').limit(1);
+      const latencyMs = Math.max(1, Date.now() - startTime);
+
       if (!error) {
         return {
           connected: true,
-          message: 'PostgreSQL database connected via Supabase (Service Role).',
+          status: 'connected',
+          message: 'Database connected successfully',
           timestamp,
+          latencyMs,
         };
       }
-      if (error.code === '42501' || error.message?.includes('permission denied for table profiles')) {
+
+      // Safe error messages without leaking internal strings
+      if (error.code === '42501' || error.message?.includes('permission denied')) {
         return {
           connected: false,
+          status: 'disconnected',
           code: '42501',
-          message: `Database error: permission denied for table profiles. PostgreSQL table GRANTs required: execute database/policies/001_rls_policies.sql to grant privileges to service_role.`,
-          hint: 'Grant the required privileges to the current role with: GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO service_role, authenticated;',
+          message: 'We are unable to connect to the database. Please try again later.',
+          error: 'Database permission denied for verification query under Row Level Security.',
           timestamp,
+          latencyMs,
         };
       }
+
       return {
         connected: false,
-        message: `Database error: ${error.message}`,
+        status: 'disconnected',
+        message: 'We are unable to connect to the database. Please try again later.',
+        error: 'Database query failed to respond. Connectivity issue detected.',
         timestamp,
+        latencyMs,
       };
     }
 
     // 2. If running with anon key, verify connectivity via public courses catalog
-    // Note: 'profiles' table is strictly protected by RLS and requires authentication;
-    // unauthenticated anon client correctly checks connectivity through public catalog.
     if (supabase) {
       const { error: courseErr } = await supabase.from('courses').select('id').limit(1);
+      const latencyMs = Math.max(1, Date.now() - startTime);
+
       if (!courseErr) {
         return {
           connected: true,
-          message: 'PostgreSQL database connected via Supabase (Public Catalog).',
+          status: 'connected',
+          message: 'Database connected successfully',
           timestamp,
+          latencyMs,
         };
       }
 
       return {
         connected: false,
-        message: `Database error: ${courseErr.message}`,
+        status: 'disconnected',
+        message: 'We are unable to connect to the database. Please try again later.',
+        error: 'Database query failed to respond. Connectivity issue detected.',
         timestamp,
+        latencyMs,
       };
     }
 
     return {
       connected: false,
-      message: 'Database client not initialized.',
+      status: 'disconnected',
+      message: 'We are unable to connect to the database. Please try again later.',
+      error: 'Database client not initialized.',
       timestamp,
+      latencyMs: 0,
     };
-  } catch (err: any) {
+  } catch {
+    const latencyMs = Date.now() - startTime;
     return {
       connected: false,
-      message: `Database connection failed: ${err.message || 'Network unreachable'}`,
+      status: 'disconnected',
+      message: 'We are unable to connect to the database. Please try again later.',
+      error: 'We are unable to connect to the database. Please try again later.',
       timestamp,
+      latencyMs,
     };
   }
 }
