@@ -117,7 +117,7 @@ export class AuthController {
       if (!adminProfile) {
         // If not in database yet, create admin profile in PostgreSQL
         adminProfile = await db.insertProfile({
-          id: `admin-${Date.now()}`,
+          id: crypto.randomUUID(),
           email: cleanIdentifier.includes('@') ? cleanIdentifier : (envAdminEmail || 'admin@exampro.edu'),
           full_name: 'Chief Examination Controller',
           role: 'admin',

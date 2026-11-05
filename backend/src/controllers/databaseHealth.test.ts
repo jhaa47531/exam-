@@ -1,12 +1,26 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'http';
+import { createApp } from '../app';
 
-const baseUrl = 'http://localhost:3000';
-
+let baseUrl: string;
 let adminToken: string;
 let studentToken: string;
+let serverInstance: http.Server;
 
 before(async () => {
+  const app = createApp();
+  serverInstance = http.createServer(app);
+  await new Promise<void>((resolve) => {
+    serverInstance.listen(0, '127.0.0.1', () => {
+      const addr = serverInstance.address() as any;
+      baseUrl = `http://127.0.0.1:${addr.port}`;
+      resolve();
+    });
+  });
+
   // Ensure database simulation is reset before tests
   await fetch(`${baseUrl}/api/health/database/simulate`, {
     method: 'POST',
@@ -244,4 +258,10 @@ test('Scenario 7: Session preservation - database downtime does not invalidate u
     headers: { Authorization: `Bearer ${adminToken}` },
   });
   assert.equal(recheckRes.status, 200);
+});
+
+after(() => {
+  if (serverInstance) {
+    serverInstance.close();
+  }
 });

@@ -47,6 +47,8 @@ export async function authenticateToken(
             email: process.env.ADMIN_EMAIL || 'admin@exampro.edu',
             full_name: 'System Administrator',
             role: 'admin',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           };
         }
       }
@@ -57,6 +59,8 @@ export async function authenticateToken(
           email: 'alex.student@exampro.edu',
           full_name: 'Alex Rivera',
           role: 'student',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         };
       }
 
